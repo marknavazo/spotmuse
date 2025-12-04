@@ -1,55 +1,84 @@
-import React, { useEffect, useState } from 'react'
-import { Container, TextField, Button, Paper, Table, TableContainer, TableHead, TableRow, TableCell, TableBody, IconButton, Grid, Typography, ButtonGroup } from '@mui/material'
-import PersonAddIcon from '@mui/icons-material/PersonAdd'
-import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
-import toast from 'react-hot-toast'
-import auth from '../../firebase/auth'
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../../firebase/firestore'
-import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react';
+import {
+  Container,
+  TextField,
+  Button,
+  Paper,
+  Table,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  IconButton,
+  Grid,
+  Typography,
+  ButtonGroup,
+} from '@mui/material';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
+import toast from 'react-hot-toast';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+
+import { db } from '../../firebase/firestore';
+import auth from '../../firebase/auth';
 
 export default function FriendsPage() {
-  const navigate = useNavigate()
-  const { t } = useTranslation()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [following, setFollowing] = useState([])
-  const [followers, setFollowers] = useState([])
-  const [activeTab, setActiveTab] = useState('following')
-  const user = auth.currentUser
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [activeTab, setActiveTab] = useState('following');
+  const user = auth.currentUser;
 
   useEffect(() => {
-    if (!user) return
+    if (!user) return;
     // Subscribe to people I'm following
-    const followingRef = collection(db, 'friends')
-    const q1 = query(followingRef, where('userId', '==', user.uid))
-    const unsubFollowing = onSnapshot(q1, snap => {
-      setFollowing(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
+    const followingRef = collection(db, 'friends');
+    const q1 = query(followingRef, where('userId', '==', user.uid));
+    const unsubFollowing = onSnapshot(q1, (snap) => {
+      setFollowing(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
     // Subscribe to my followers
-    const q2 = query(followingRef, where('friendUid', '==', user.uid))
-    const unsubFollowers = onSnapshot(q2, snap => {
-      setFollowers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
-    return () => { unsubFollowing(); unsubFollowers(); }
-  }, [user])
+    const q2 = query(followingRef, where('friendUid', '==', user.uid));
+    const unsubFollowers = onSnapshot(q2, (snap) => {
+      setFollowers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => {
+      unsubFollowing();
+      unsubFollowers();
+    };
+  }, [user]);
 
   async function handleSearch() {
-    if (!searchQuery) return
+    if (!searchQuery) return;
     try {
-      const usersRef = collection(db, 'users')
-      const snapshot = await getDocs(usersRef)
+      const usersRef = collection(db, 'users');
+      const snapshot = await getDocs(usersRef);
       const results = snapshot.docs
-        .map(d => ({ uid: d.id, ...d.data() }))
-        .filter(u => 
-          u.uid !== user.uid && 
-          (u.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           u.uid.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-      setSearchResults(results)
-    } catch (error) {
-      toast.error('Error al buscar usuarios')
+        .map((d) => ({ uid: d.id, ...d.data() }))
+        .filter(
+          (u) =>
+            u.uid !== user.uid &&
+            (u.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              u.uid.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+      setSearchResults(results);
+    } catch (_error) {
+      toast.error('Error al buscar usuarios');
     }
   }
 
@@ -59,46 +88,46 @@ export default function FriendsPage() {
         userId: user.uid,
         friendUid: friendUid,
         friendName: friendName || 'Usuario',
-        addedAt: new Date().toISOString()
-      })
-      toast.success('Amigo agregado')
-    } catch (error) {
-      toast.error('Error al agregar amigo')
+        addedAt: new Date().toISOString(),
+      });
+      toast.success('Amigo agregado');
+    } catch (_error) {
+      toast.error('Error al agregar amigo');
     }
   }
 
   async function removeFriend(friendId) {
     try {
-      await deleteDoc(doc(db, 'friends', friendId))
-      toast.success('Amigo eliminado')
-    } catch (error) {
-      toast.error('Error al eliminar amigo')
+      await deleteDoc(doc(db, 'friends', friendId));
+      toast.success('Amigo eliminado');
+    } catch (_error) {
+      toast.error('Error al eliminar amigo');
     }
   }
 
-  const isFollowing = (friendUid) => following.some(f => f.friendUid === friendUid)
-  const isMutual = (followerUid) => following.some(f => f.friendUid === followerUid)
+  const isFollowing = (friendUid) => following.some((f) => f.friendUid === friendUid);
+  const isMutual = (followerUid) => following.some((f) => f.friendUid === followerUid);
 
   async function followBack(followerUid, followerName) {
-    await addFriend(followerUid, followerName)
+    await addFriend(followerUid, followerName);
   }
 
   return (
     <Container maxWidth={false} sx={{ px: 3 }}>
       <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
         <Grid item xs={9}>
-          <TextField 
-            fullWidth 
-            value={searchQuery} 
-            onChange={e => setSearchQuery(e.target.value)} 
-            onKeyPress={e => e.key === 'Enter' && handleSearch()}
-            placeholder={t('Buscar usuarios por nombre o UID')} 
+          <TextField
+            fullWidth
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder={t('Buscar usuarios por nombre o UID')}
           />
         </Grid>
         <Grid item xs={3}>
-          <Button 
-            onClick={handleSearch} 
-            variant="contained" 
+          <Button
+            onClick={handleSearch}
+            variant="contained"
             sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
           >
             {t('Buscar')}
@@ -108,7 +137,9 @@ export default function FriendsPage() {
 
       {searchResults.length > 0 && (
         <Paper sx={{ p: 2, mb: 4 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('Resultados de búsqueda')}</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {t('Resultados de búsqueda')}
+          </Typography>
           <TableContainer>
             <Table>
               <TableHead>
@@ -119,16 +150,18 @@ export default function FriendsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {searchResults.map(u => (
+                {searchResults.map((u) => (
                   <TableRow key={u.uid}>
                     <TableCell>{u.fullName || 'Sin nombre'}</TableCell>
                     <TableCell>{u.uid}</TableCell>
                     <TableCell>
                       {isFollowing(u.uid) ? (
-                        <Typography variant="body2" color="success.main">Ya sigues a este usuario</Typography>
+                        <Typography variant="body2" color="success.main">
+                          Ya sigues a este usuario
+                        </Typography>
                       ) : (
-                        <IconButton 
-                          onClick={() => addFriend(u.uid, u.fullName)} 
+                        <IconButton
+                          onClick={() => addFriend(u.uid, u.fullName)}
                           sx={{ color: '#1db954' }}
                         >
                           <PersonAddIcon />
@@ -144,20 +177,20 @@ export default function FriendsPage() {
       )}
 
       <ButtonGroup variant="contained" sx={{ mb: 2 }}>
-        <Button 
-          onClick={() => setActiveTab('following')} 
-          sx={{ 
+        <Button
+          onClick={() => setActiveTab('following')}
+          sx={{
             bgcolor: activeTab === 'following' ? '#1db954' : '#2a2a2a',
-            '&:hover': { bgcolor: activeTab === 'following' ? '#1ed760' : '#3a3a3a' }
+            '&:hover': { bgcolor: activeTab === 'following' ? '#1ed760' : '#3a3a3a' },
           }}
         >
           {t('Siguiendo')} ({following.length})
         </Button>
-        <Button 
-          onClick={() => setActiveTab('followers')} 
-          sx={{ 
+        <Button
+          onClick={() => setActiveTab('followers')}
+          sx={{
             bgcolor: activeTab === 'followers' ? '#1db954' : '#2a2a2a',
-            '&:hover': { bgcolor: activeTab === 'followers' ? '#1ed760' : '#3a3a3a' }
+            '&:hover': { bgcolor: activeTab === 'followers' ? '#1ed760' : '#3a3a3a' },
           }}
         >
           {t('Seguidores')} ({followers.length})
@@ -166,7 +199,9 @@ export default function FriendsPage() {
 
       {activeTab === 'following' && (
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('Gente que sigo')}</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {t('Gente que sigo')}
+          </Typography>
           <TableContainer>
             <Table>
               <TableHead>
@@ -177,8 +212,8 @@ export default function FriendsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {following.map(f => (
-                  <TableRow 
+                {following.map((f) => (
+                  <TableRow
                     key={f.id}
                     sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' } }}
                     onClick={() => navigate(`/user/${f.userId}`)}
@@ -186,11 +221,11 @@ export default function FriendsPage() {
                     <TableCell>{f.friendName}</TableCell>
                     <TableCell>{f.friendUid}</TableCell>
                     <TableCell>
-                      <IconButton 
+                      <IconButton
                         onClick={(e) => {
-                          e.stopPropagation()
-                          removeFriend(f.id)
-                        }} 
+                          e.stopPropagation();
+                          removeFriend(f.id);
+                        }}
                         color="error"
                       >
                         <PersonRemoveIcon />
@@ -213,7 +248,9 @@ export default function FriendsPage() {
 
       {activeTab === 'followers' && (
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('Gente que me sigue')}</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {t('Gente que me sigue')}
+          </Typography>
           <TableContainer>
             <Table>
               <TableHead>
@@ -225,10 +262,10 @@ export default function FriendsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {followers.map(f => {
-                  const mutual = isMutual(f.userId)
+                {followers.map((f) => {
+                  const mutual = isMutual(f.userId);
                   return (
-                    <TableRow 
+                    <TableRow
                       key={f.id}
                       sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' } }}
                       onClick={() => navigate(`/user/${f.userId}`)}
@@ -251,13 +288,13 @@ export default function FriendsPage() {
                           <Button
                             size="small"
                             onClick={(e) => {
-                              e.stopPropagation()
-                              followBack(f.userId, f.friendName)
+                              e.stopPropagation();
+                              followBack(f.userId, f.friendName);
                             }}
-                            sx={{ 
-                              bgcolor: '#1db954', 
+                            sx={{
+                              bgcolor: '#1db954',
                               color: 'white',
-                              '&:hover': { bgcolor: '#1ed760' } 
+                              '&:hover': { bgcolor: '#1ed760' },
                             }}
                           >
                             {t('Seguir')}
@@ -265,7 +302,7 @@ export default function FriendsPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                  )
+                  );
                 })}
                 {followers.length === 0 && (
                   <TableRow>
@@ -280,5 +317,5 @@ export default function FriendsPage() {
         </Paper>
       )}
     </Container>
-  )
+  );
 }

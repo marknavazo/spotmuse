@@ -1,13 +1,24 @@
-body { font-family: Roboto, Arial, sans-serif; margin:0; }
+body {
+  font-family: Roboto, Arial, sans-serif;
+  margin: 0;
+}
 
 /* Titles use Poppins for a bold modern feel */
-h1, h2, h3, h4, .MuiTypography-h1, .MuiTypography-h2, .MuiTypography-h3, .MuiTypography-h4 {
-	font-family: 'Poppins', Roboto, Arial, sans-serif;
-	letter-spacing: 0.3px;
-	font-weight: 700;
+h1,
+h2,
+h3,
+h4,
+.MuiTypography-h1,
+.MuiTypography-h2,
+.MuiTypography-h3,
+.MuiTypography-h4 {
+  font-family: 'Poppins', Roboto, Arial, sans-serif;
+  letter-spacing: 0.3px;
+  font-weight: 700;
 }
 
 /* AppBar menu options use Montserrat */
-.MuiAppBar-root .MuiButton-root, .MuiAppBar-root .MuiTypography-root {
-	font-family: 'Montserrat', Roboto, Arial, sans-serif;
+.MuiAppBar-root .MuiButton-root,
+.MuiAppBar-root .MuiTypography-root {
+  font-family: 'Montserrat', Roboto, Arial, sans-serif;
 }

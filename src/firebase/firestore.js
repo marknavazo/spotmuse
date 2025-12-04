@@ -1,4 +1,5 @@
-import { getFirestore } from 'firebase/firestore'
-import { firebaseApp } from './firebaseConfig'
+import { getFirestore } from 'firebase/firestore';
 
-export const db = getFirestore(firebaseApp)
+import { firebaseApp } from './firebaseConfig';
+
+export const db = getFirestore(firebaseApp);

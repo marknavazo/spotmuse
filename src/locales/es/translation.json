@@ -38,30 +38,33 @@
   "Eliminar recomendación": "Eliminar recomendación",
   "Idioma": "Idioma",
   "Español": "Español",
-  "Inglés": "Inglés"
-  ,"SpotMuse": "SpotMuse"
-  ,"Amigos": "Amigos"
-  ,"Portada": "Portada"
-  ,"Álbum": "Álbum"
-  ,"Resultados": "Resultados"
-  ,"Recomendar a un amigo": "Recomendar a un amigo"
-  ,"Álbumes recomendados por mis amigos (pendientes)": "Álbumes recomendados por mis amigos (pendientes)"
-  ,"Sesión iniciada": "¡Sesión iniciada correctamente!"
-  ,"Error al iniciar sesión": "Error al iniciar sesión"
-  ,"Bienvenido a SpotMuse": "Bienvenido a SpotMuse"
-  ,"Acceder con Google": "Entrar con Google"
-  ,"Nombre y apellidos": "Nombre y apellidos"
-  ,"Fecha de nacimiento": "Fecha de nacimiento"
-  ,"Lugar de residencia": "Lugar de residencia"
-  ,"Mi perfil": "Mi perfil"
-  ,"Accede para editar tu perfil": "Accede para editar tu perfil"
-  ,"Perfil guardado correctamente": "Perfil guardado correctamente"
-  ,"Error al guardar el perfil": "Error al guardar el perfil"
-  ,"No autenticado": "No autenticado"
-  ,"Subiendo...": "Subiendo..."
-  ,"Cambiar foto": "Cambiar foto"
-  ,"Estado": "Estado"
-  ,"Acciones": "Acciones"
-    ,"Álbumes": "Álbumes"
-  ,"Artistas": "Artistas"
+  "Inglés": "Inglés",
+  "SpotMuse": "SpotMuse",
+  "Amigos": "Amigos",
+  "Portada": "Portada",
+  "Álbum": "Álbum",
+  "Resultados": "Resultados",
+  "Recomendar a un amigo": "Recomendar a un amigo",
+  "Álbumes recomendados por mis amigos (pendientes)": "Álbumes recomendados por mis amigos (pendientes)",
+  "Sesión iniciada": "¡Sesión iniciada correctamente!",
+  "Error al iniciar sesión": "Error al iniciar sesión",
+  "Bienvenido a SpotMuse": "Bienvenido a SpotMuse",
+  "Acceder con Google": "Entrar con Google",
+  "Nombre y apellidos": "Nombre y apellidos",
+  "Fecha de nacimiento": "Fecha de nacimiento",
+  "Lugar de residencia": "Lugar de residencia",
+  "Mi perfil": "Mi perfil",
+  "Accede para editar tu perfil": "Accede para editar tu perfil",
+  "Perfil guardado correctamente": "Perfil guardado correctamente",
+  "Error al guardar el perfil": "Error al guardar el perfil",
+  "No autenticado": "No autenticado",
+  "Subiendo...": "Subiendo...",
+  "Cambiar foto": "Cambiar foto",
+  "Estado": "Estado",
+  "Acciones": "Acciones",
+  "Álbumes": "Álbumes",
+  "Artistas": "Artistas",
+  "Página no encontrada": "Página no encontrada",
+  "La ruta que buscas no existe o ha sido movida.": "La ruta que buscas no existe o ha sido movida.",
+  "Volver al inicio": "Volver al inicio"
 }
