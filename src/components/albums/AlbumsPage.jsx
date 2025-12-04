@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Container, Grid, TextField, Button, Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, ButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText, ListItemButton, CircularProgress, Box } from '@mui/material'
-import { searchAlbums } from '../../services/spotifyService'
+import { searchAlbums, getArtistAlbums } from '../../services/spotifyService'
+import { getArtistEvents } from '../../services/eventsService'
 import toast from 'react-hot-toast'
 import auth from '../../firebase/auth'
-import { collection, query, where, getDocs, addDoc, setDoc, doc, onSnapshot, deleteDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, addDoc, setDoc, doc, onSnapshot, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../firebase/firestore'
 import ShareIcon from '@mui/icons-material/Share'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +29,12 @@ export default function AlbumsPage() {
   const [friendsLoading, setFriendsLoading] = useState(true)
   const [openDialog, setOpenDialog] = useState(false)
   const [selectedAlbum, setSelectedAlbum] = useState(null)
+  const [news, setNews] = useState([])
+  const [newsLoading, setNewsLoading] = useState(false)
+  const [concerts, setConcerts] = useState([])
+  const [concertsLoading, setConcertsLoading] = useState(false)
+  const [myRatings, setMyRatings] = useState({})
+  const [avgRatings, setAvgRatings] = useState({})
   const token = import.meta.env.VITE_SPOTIFY_TOKEN
   const user = auth.currentUser
 
@@ -62,6 +69,35 @@ export default function AlbumsPage() {
     return () => { unsubMy(); unsubRec(); unsubRecAccepted(); unsubFriends(); }
   }, [user])
 
+  // Subscribe to ratings to show my score and global average
+  useEffect(() => {
+    if (!user) return
+    const ratingsRef = collection(db, 'ratings')
+    const unsub = onSnapshot(ratingsRef, snap => {
+      const myMap = {}
+      const totals = {}
+      const counts = {}
+      snap.docs.forEach(d => {
+        const data = d.data()
+        if (!data.albumId || typeof data.value !== 'number') return
+        // My ratings
+        if (data.uid === user.uid) {
+          myMap[data.albumId] = data.value
+        }
+        // Global totals
+        totals[data.albumId] = (totals[data.albumId] || 0) + data.value
+        counts[data.albumId] = (counts[data.albumId] || 0) + 1
+      })
+      const avgMap = {}
+      Object.keys(totals).forEach(id => {
+        avgMap[id] = totals[id] / counts[id]
+      })
+      setMyRatings(myMap)
+      setAvgRatings(avgMap)
+    })
+    return () => unsub()
+  }, [user])
+
   async function handleSearch() {
     if (!q) return
     setSearchLoading(true)
@@ -88,21 +124,87 @@ export default function AlbumsPage() {
     }, 100)
   }
 
-  async function saveAlbum(album) {
-    if (!user) return toast.error('Accede para guardar álbumes')
+  async function loadNewsFromFavorites() {
+    if (!user) return
+    setNewsLoading(true)
     try {
+      // Load user favorites from profile
+      const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', user.uid)))
+      const meDoc = userSnap.docs[0]?.data()
+      const favs = meDoc?.favoriteArtists || []
+      const now = new Date()
+      const cutoff = new Date(now)
+      cutoff.setMonth(now.getMonth() - 3)
+      const releases = []
+      for (const fav of favs) {
+        const items = await getArtistAlbums(fav.id, { include_groups: 'album,single', limit: 10 })
+        for (const it of items) {
+          const d = new Date(it.release_date)
+          if (d >= cutoff) releases.push(it)
+        }
+      }
+      const unique = {}
+      for (const r of releases) unique[r.id] = r
+      setNews(Object.values(unique))
+    } catch (e) {
+      toast.error(t('Error cargando novedades'))
+    } finally {
+      setNewsLoading(false)
+    }
+  }
+
+  async function loadConcertsFromFavorites() {
+    if (!user) return
+    setConcertsLoading(true)
+    try {
+      const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', user.uid)))
+      const meDoc = userSnap.docs[0]?.data()
+      const favs = meDoc?.favoriteArtists || []
+      const events = []
+      for (const fav of favs) {
+        const artistEvents = await getArtistEvents(fav.name)
+        artistEvents.forEach(e => events.push({ ...e, artistName: fav.name }))
+      }
+      // Remove duplicates by id
+      const byId = {}
+      for (const ev of events) byId[ev.id] = ev
+      setConcerts(Object.values(byId))
+    } catch (e) {
+      toast.error(t('Error cargando conciertos'))
+    } finally {
+      setConcertsLoading(false)
+    }
+  }
+
+  async function saveAlbum(album) {
+    if (!user) return
+    try {
+      // Normalize album shape to match My Albums subscription (owner/albumId/name/artists/images/releaseDate)
+      const albumId = album.albumId || album.id
+      const name = album.name
+      const artists = Array.isArray(album.artists) ? album.artists.map(a => a.name ?? a).join(', ') : (album.artists || '')
+      const images = album.images || []
+      const releaseDate = album.releaseDate || album.release_date || null
+
+      // Duplicate check aligned with 'owner' and 'albumId'
+      const qDup = query(collection(db, 'albums'), where('owner', '==', user.uid), where('albumId', '==', albumId))
+      const existing = await getDocs(qDup)
+      if (!existing.empty) {
+        toast(t('Este álbum ya está en tu colección'))
+        return
+      }
       await addDoc(collection(db, 'albums'), {
         owner: user.uid,
-        albumId: album.id,
-        name: album.name,
-        artists: album.artists.map(a=>a.name).join(', '),
-        images: album.images,
-        releaseDate: album.release_date,
-        addedAt: new Date().toISOString()
+        albumId,
+        name,
+        artists,
+        images,
+        releaseDate,
+        addedAt: serverTimestamp()
       })
-      toast.success('Álbum guardado')
+      toast.success(t('Álbum guardado'))
     } catch (error) {
-      toast.error('Error al guardar álbum')
+      toast.error(t('Error al guardar álbum'))
     }
   }
 
@@ -217,6 +319,24 @@ export default function AlbumsPage() {
             >
               {t('Recomendados')} ({recommended.length})
             </Button>
+            <Button 
+              onClick={() => { setActiveTab('news'); loadNewsFromFavorites() }} 
+              sx={{ 
+                bgcolor: activeTab === 'news' ? '#1db954' : '#2a2a2a',
+                '&:hover': { bgcolor: activeTab === 'news' ? '#1ed760' : '#3a3a3a' }
+              }}
+            >
+              {t('Novedades')} ({news.length})
+            </Button>
+            <Button 
+              onClick={() => { setActiveTab('concerts'); loadConcertsFromFavorites() }} 
+              sx={{ 
+                bgcolor: activeTab === 'concerts' ? '#1db954' : '#2a2a2a',
+                '&:hover': { bgcolor: activeTab === 'concerts' ? '#1ed760' : '#3a3a3a' }
+              }}
+            >
+              {t('Conciertos')} ({concerts.length})
+            </Button>
           </ButtonGroup>
 
           {activeTab === 'myAlbums' && (
@@ -236,6 +356,9 @@ export default function AlbumsPage() {
                       <TableCell>{t('Nombre')}</TableCell>
                       <TableCell>{t('Artistas')}</TableCell>
                       <TableCell>{t('Año')}</TableCell>
+                      <TableCell>{t('Media')}</TableCell>
+                      <TableCell>{t('Mi puntuación')}</TableCell>
+                      <TableCell>{t('Añadido')}</TableCell>
                       <TableCell>{t('Acciones')}</TableCell>
                     </TableRow>
                   </TableHead>
@@ -271,7 +394,14 @@ export default function AlbumsPage() {
                             {a.artists}
                           </span>
                         </TableCell>
-                        <TableCell>{a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}</TableCell>
+                         <TableCell>{a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}</TableCell>
+                         <TableCell>{avgRatings[a.albumId] ? avgRatings[a.albumId].toFixed(1) : '-'}</TableCell>
+                         <TableCell>{myRatings[a.albumId] ?? '-'}</TableCell>
+                         <TableCell>
+                           {a.addedAt?.toDate
+                             ? new Date(a.addedAt.toDate()).toLocaleDateString()
+                             : (a.addedAt ? new Date(a.addedAt).toLocaleDateString() : '-')}
+                         </TableCell>
                         <TableCell>
                         <IconButton onClick={() => window.open(`https://open.spotify.com/album/${a.albumId}`, '_blank')} sx={{ color: '#1db954' }}>
                           <PlayArrowIcon />
@@ -395,6 +525,97 @@ export default function AlbumsPage() {
               </Paper>
             </>
           )}
+
+          {activeTab === 'news' && (
+            <Paper sx={{ p:2 }}>
+              <h3>{t('Novedades basadas en tus favoritos')} ({news.length})</h3>
+              {newsLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={20} />
+                  <span>{t('Cargando...')}</span>
+                </Box>
+              )}
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {news.map(album => (
+                  <Grid item key={album.id} xs={12} sm={6} md={4}>
+                    <Paper sx={{ p:2 }}>
+                      <img src={album.images?.[0]?.url} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', cursor: 'pointer' }} onClick={() => navigate(`/album/${album.id}`)} />
+                      <div>
+                        <strong 
+                          style={{ cursor: 'pointer', color: '#1db954', textDecoration: 'underline' }}
+                          onClick={() => navigate(`/album/${album.id}`)}
+                        >
+                          {album.name}
+                        </strong>
+                      </div>
+                      <div>{album.artists?.map(a=>a.name).join(', ')}</div>
+                      <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>{album.release_date ? new Date(album.release_date).getFullYear() : ''}</div>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                        <Button 
+                          variant="contained" 
+                          sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} 
+                          onClick={() => saveAlbum({ id: album.id, name: album.name, artists: album.artists, images: album.images, release_date: album.release_date })}
+                        >
+                          {t('Guardar')}
+                        </Button>
+                        <Button 
+                          variant="outlined" 
+                          sx={{ borderColor: '#1db954', color: '#1db954', '&:hover': { borderColor: '#1ed760', color: '#1ed760' } }} 
+                          onClick={() => {
+                            const url = album.external_urls?.spotify || `https://open.spotify.com/album/${album.id}`
+                            window.open(url, '_blank')
+                          }}
+                        >
+                          {t('Escuchar en Spotify')}
+                        </Button>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+                {news.length === 0 && !newsLoading && (
+                  <Grid item xs={12}><Paper sx={{ p:2, textAlign:'center' }}><span>{t('No hay novedades recientes')}</span></Paper></Grid>
+                )}
+              </Grid>
+            </Paper>
+          )}
+
+          {activeTab === 'concerts' && (
+            <Paper sx={{ p:2 }}>
+              <h3>{t('Conciertos de tus favoritos')} ({concerts.length})</h3>
+              {concertsLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={20} />
+                  <span>{t('Cargando...')}</span>
+                </Box>
+              )}
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {concerts.map(ev => (
+                  <Grid item key={ev.id} xs={12} sm={6} md={4}>
+                    <Paper sx={{ p:2 }}>
+                      <div style={{ fontWeight: 600 }}>{ev.name}</div>
+                      <div style={{ color: '#999' }}>{ev.artistName}</div>
+                      <div style={{ marginTop: 4 }}>{ev.date ? new Date(ev.date).toLocaleDateString() : '-'}</div>
+                      <div style={{ color: '#777' }}>{ev.city} {ev.venue ? `- ${ev.venue}` : ''}</div>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                        {ev.url && (
+                          <Button 
+                            variant="contained" 
+                            sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} 
+                            onClick={() => window.open(ev.url, '_blank')}
+                          >
+                            {t('Ver entradas')}
+                          </Button>
+                        )}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+                {concerts.length === 0 && !concertsLoading && (
+                  <Grid item xs={12}><Paper sx={{ p:2, textAlign:'center' }}><span>{t('No hay conciertos próximos')}</span></Paper></Grid>
+                )}
+              </Grid>
+            </Paper>
+          )}
         </Grid>
       </Grid>
 
@@ -427,7 +648,14 @@ export default function AlbumsPage() {
                   </div>
                   <div>{album.artists.map(a=>a.name).join(', ')}</div>
                   <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>{album.release_date ? new Date(album.release_date).getFullYear() : ''}</div>
-                  <Button variant="contained" sx={{ mt:1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} onClick={() => saveAlbum(album)}>Guardar</Button>
+                  <Button 
+                    variant="contained" 
+                    sx={{ mt:1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} 
+                    onClick={() => saveAlbum(album)}
+                    disabled={myAlbums.some(a => (a.albumId || a.album?.id) === album.id)}
+                  >
+                    {myAlbums.some(a => (a.albumId || a.album?.id) === album.id) ? t('Ya guardado') : t('Guardar')}
+                  </Button>
                 </Paper>
               </Grid>
             ))}

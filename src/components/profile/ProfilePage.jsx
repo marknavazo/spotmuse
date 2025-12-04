@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Container, TextField, Button, Typography, Avatar, Box, IconButton } from '@mui/material'
+import { Container, TextField, Button, Typography, Avatar, Box, IconButton, Paper, Grid, CircularProgress, List, ListItem, ListItemText, ListItemButton } from '@mui/material'
 import PhotoCamera from '@mui/icons-material/PhotoCamera'
 import toast from 'react-hot-toast'
 import auth from '../../firebase/auth'
@@ -9,14 +9,19 @@ import { storage } from '../../firebase/storage'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useTranslation } from 'react-i18next'
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material'
+import { searchArtists } from '../../services/spotifyService'
+import DeleteIcon from '@mui/icons-material/Delete'
 
 export default function ProfilePage() {
   const user = auth.currentUser
-  const [form, setForm] = useState({ fullName: '', birthDate: '', residence: '', photoURL: '', preferredLanguage: '' })
+  const [form, setForm] = useState({ fullName: '', birthDate: '', residence: '', photoURL: '', preferredLanguage: '', favoriteArtists: [] })
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const { t, i18n } = useTranslation()
   const [lang, setLang] = useState(i18n.language)
+  const [artistQuery, setArtistQuery] = useState('')
+  const [artistResults, setArtistResults] = useState([])
+  const [artistLoading, setArtistLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -67,6 +72,32 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleArtistSearch() {
+    if (!artistQuery) return
+    setArtistLoading(true)
+    try {
+      const items = await searchArtists(artistQuery)
+      setArtistResults(items)
+    } catch (e) {
+      toast.error(t('Error buscando artistas'))
+    } finally {
+      setArtistLoading(false)
+    }
+  }
+
+  function addFavoriteArtist(artist) {
+    const exists = form.favoriteArtists?.some(a => a.id === artist.id)
+    if (exists) return toast.error(t('Este artista ya está en tus favoritos'))
+    const newFavs = [...(form.favoriteArtists || []), { id: artist.id, name: artist.name, images: artist.images }]
+    setForm(prev => ({ ...prev, favoriteArtists: newFavs }))
+    toast.success(t('Artista añadido a favoritos'))
+  }
+
+  function removeFavoriteArtist(id) {
+    const newFavs = (form.favoriteArtists || []).filter(a => a.id !== id)
+    setForm(prev => ({ ...prev, favoriteArtists: newFavs }))
+  }
+
   if (!user) return <Typography>{t('Accede para editar tu perfil')}</Typography>
 
   return (
@@ -113,7 +144,68 @@ export default function ProfilePage() {
           </Select>
         </FormControl>
       </Box>
-      <Button variant="contained" onClick={save} sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{t('Guardar')}</Button>
+      <Paper sx={{ p: 2, mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>{t('Grupos favoritos')}</Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={9}>
+            <TextField 
+              fullWidth 
+              placeholder={t('Buscar artistas en Spotify')} 
+              value={artistQuery} 
+              onChange={e => setArtistQuery(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && handleArtistSearch()}
+            />
+          </Grid>
+          <Grid item xs={3}>
+            <Button variant="contained" onClick={handleArtistSearch} disabled={artistLoading} sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>
+              {artistLoading ? t('Buscando...') : t('Buscar')}
+            </Button>
+          </Grid>
+        </Grid>
+
+        {artistLoading && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+            <CircularProgress size={20} />
+            <span>{t('Buscando...')}</span>
+          </Box>
+        )}
+
+        <List dense sx={{ mt: 2 }}>
+          {artistResults.map(ar => (
+            <ListItem key={ar.id} secondaryAction={
+              <Button variant="outlined" onClick={() => addFavoriteArtist(ar)} sx={{ borderColor: '#1db954', color: '#1db954' }}>{t('Añadir')}</Button>
+            }>
+              <ListItemButton onClick={() => window.open(`https://open.spotify.com/artist/${ar.id}`, '_blank')}>
+                <ListItemText primary={ar.name} secondary={t('Seguidores') + ': ' + (ar.followers?.total || 0)} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+
+        <Typography variant="subtitle1" sx={{ mt: 3 }}>{t('Tus favoritos')}</Typography>
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          {(form.favoriteArtists || []).map(f => (
+            <Grid item key={f.id} xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <img src={f.images?.[2]?.url || f.images?.[0]?.url} alt={f.name} style={{ width: 48, height: 48, borderRadius: 4, objectFit: 'cover' }} />
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{f.name}</div>
+                  </div>
+                </Box>
+                <IconButton onClick={() => removeFavoriteArtist(f.id)} color="error">
+                  <DeleteIcon />
+                </IconButton>
+              </Paper>
+            </Grid>
+          ))}
+          {(form.favoriteArtists || []).length === 0 && (
+            <Grid item xs={12}><Typography color="text.secondary">{t('Aún no tienes artistas favoritos')}</Typography></Grid>
+          )}
+        </Grid>
+      </Paper>
+
+      <Button variant="contained" onClick={save} sx={{ mt: 3, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{t('Guardar')}</Button>
     </Container>
   )
 }

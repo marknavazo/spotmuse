@@ -47,3 +47,27 @@ export async function getAlbumById(id) {
   })
   return res.data
 }
+
+export async function searchArtists(q) {
+  const token = await getAccessToken()
+  const res = await axios.get(`${SPOTIFY_BASE}/search`, {
+    params: { q, type: 'artist', limit: 10 },
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  return res.data.artists.items
+}
+
+export async function getArtistAlbums(artistId, options = {}) {
+  const token = await getAccessToken()
+  const params = {
+    include_groups: options.include_groups || 'album,single',
+    market: options.market || 'ES',
+    limit: options.limit || 20,
+    offset: options.offset || 0,
+  }
+  const res = await axios.get(`${SPOTIFY_BASE}/artists/${artistId}/albums`, {
+    params,
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  return res.data.items
+}

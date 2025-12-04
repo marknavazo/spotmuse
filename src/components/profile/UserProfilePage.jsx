@@ -103,6 +103,28 @@ export default function UserProfilePage() {
         </Box>
       </Paper>
 
+      {userProfile?.favoriteArtists && userProfile.favoriteArtists.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('Grupos favoritos')}</Typography>
+          <Grid container spacing={2}>
+            {userProfile.favoriteArtists.map(f => (
+              <Grid item key={f.id} xs={12} sm={6} md={4}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <img src={f.images?.[2]?.url || f.images?.[0]?.url} alt={f.name} style={{ width: 56, height: 56, borderRadius: 4, objectFit: 'cover' }} />
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{f.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      <span style={{ cursor: 'pointer', color: '#1db954', textDecoration: 'underline' }}
+                        onClick={() => window.open(`https://open.spotify.com/artist/${f.id}`, '_blank')}>{t('Ver en Spotify')}</span>
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      )}
+
       <Typography variant="h5" sx={{ mb: 3 }}>{t('Álbumes de {{name}}', { name: userProfile?.fullName || t('Usuario') })}</Typography>
 
       <Grid container spacing={2}>
