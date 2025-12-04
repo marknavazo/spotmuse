@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Container, TextField, Button, Typography, Avatar, Box, IconButton, Paper, Grid, CircularProgress, List, ListItem, ListItemText, ListItemButton } from '@mui/material'
+import { Container, TextField, Button, Typography, Avatar, Box, IconButton, Paper, Grid, CircularProgress, List, ListItem, ListItemText, ListItemButton, useMediaQuery } from '@mui/material'
 import PhotoCamera from '@mui/icons-material/PhotoCamera'
 import toast from 'react-hot-toast'
 import auth from '../../firebase/auth'
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [artistQuery, setArtistQuery] = useState('')
   const [artistResults, setArtistResults] = useState([])
   const [artistLoading, setArtistLoading] = useState(false)
+  const isNarrow = useMediaQuery('(max-width:1500px)')
 
   useEffect(() => {
     setLoading(true)
@@ -101,7 +102,10 @@ export default function ProfilePage() {
   if (!user) return <Typography>{t('Accede para editar tu perfil')}</Typography>
 
   return (
-    <Container maxWidth="sm">
+    <Container maxWidth={false} sx={{ px: 0 }}>
+      <Grid container spacing={0}>
+        {/* Left: user configuration */}
+        <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, borderRight: isNarrow ? 'none' : '1px solid #333', order: isNarrow ? 1 : 0 }}>
       <Typography variant="h5" sx={{ mb: 3 }}>{t('Mi perfil')}</Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
@@ -144,7 +148,11 @@ export default function ProfilePage() {
           </Select>
         </FormControl>
       </Box>
-      <Paper sx={{ p: 2, mt: 3 }}>
+      </Grid>
+
+        {/* Right: favorite artists search and list */}
+        <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, order: isNarrow ? 2 : 0 }}>
+      <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>{t('Grupos favoritos')}</Typography>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={9}>
@@ -205,7 +213,15 @@ export default function ProfilePage() {
         </Grid>
       </Paper>
 
-      <Button variant="contained" onClick={save} sx={{ mt: 3, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{t('Guardar')}</Button>
+      </Grid>
+
+      </Grid>
+
+      <Grid container>
+        <Grid item xs={12} sx={{ p: 3 }}>
+          <Button variant="contained" onClick={save} sx={{ mt: 0, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{t('Guardar')}</Button>
+        </Grid>
+      </Grid>
     </Container>
   )
 }

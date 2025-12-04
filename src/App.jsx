@@ -102,7 +102,7 @@ function App() {
           )}
         </Toolbar>
       </AppBar>
-      <Container sx={{ mt: 3 }}>
+      <Container maxWidth={false} sx={{ mt: 3, px: 0 }}>
         <Routes>
           <Route path="/" element={<Typography>{t('Bienvenido a SpotMuse — comparte y descubre álbumes')}</Typography>} />
           <Route path="/login" element={<Login />} />

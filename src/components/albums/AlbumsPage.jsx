@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Container, Grid, TextField, Button, Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, ButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText, ListItemButton, CircularProgress, Box } from '@mui/material'
+import { Container, Grid, TextField, Button, Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, ButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText, ListItemButton, CircularProgress, Box, useMediaQuery } from '@mui/material'
 import { searchAlbums, getArtistAlbums } from '../../services/spotifyService'
 import { getArtistEvents } from '../../services/eventsService'
 import toast from 'react-hot-toast'
@@ -33,10 +33,18 @@ export default function AlbumsPage() {
   const [newsLoading, setNewsLoading] = useState(false)
   const [concerts, setConcerts] = useState([])
   const [concertsLoading, setConcertsLoading] = useState(false)
+  const [concertsFilter, setConcertsFilter] = useState('')
   const [myRatings, setMyRatings] = useState({})
   const [avgRatings, setAvgRatings] = useState({})
+  const [sortKey, setSortKey] = useState('name')
+  const [sortDir, setSortDir] = useState('asc')
+  const [sortKeyRecPend, setSortKeyRecPend] = useState('albumName')
+  const [sortDirRecPend, setSortDirRecPend] = useState('asc')
+  const [sortKeyRecAcc, setSortKeyRecAcc] = useState('albumName')
+  const [sortDirRecAcc, setSortDirRecAcc] = useState('asc')
   const token = import.meta.env.VITE_SPOTIFY_TOKEN
   const user = auth.currentUser
+  const isNarrow = useMediaQuery('(max-width:1500px)')
 
   useEffect(() => {
     if (!user) return
@@ -217,6 +225,82 @@ export default function AlbumsPage() {
     }
   }
 
+  function toggleSort(key) {
+    if (sortKey === key) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  function getValueForSort(a, key) {
+    switch (key) {
+      case 'name': return a.name?.toLowerCase() || ''
+      case 'artists': return a.artists?.toLowerCase() || ''
+      case 'year': return a.releaseDate ? new Date(a.releaseDate).getFullYear() : -Infinity
+      case 'avg': return typeof avgRatings[a.albumId] === 'number' ? avgRatings[a.albumId] : -Infinity
+      case 'my': return typeof myRatings[a.albumId] === 'number' ? myRatings[a.albumId] : -Infinity
+      case 'added': {
+        const ts = a.addedAt?.toDate ? a.addedAt.toDate() : (a.addedAt ? new Date(a.addedAt) : null)
+        return ts ? ts.getTime() : -Infinity
+      }
+      default: return ''
+    }
+  }
+
+  const sortedMyAlbums = [...myAlbums].sort((a, b) => {
+    const va = getValueForSort(a, sortKey)
+    const vb = getValueForSort(b, sortKey)
+    if (va < vb) return sortDir === 'asc' ? -1 : 1
+    if (va > vb) return sortDir === 'asc' ? 1 : -1
+    return 0
+  })
+
+  function toggleSortRecPend(key) {
+    if (sortKeyRecPend === key) {
+      setSortDirRecPend(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKeyRecPend(key)
+      setSortDirRecPend('asc')
+    }
+  }
+
+  function toggleSortRecAcc(key) {
+    if (sortKeyRecAcc === key) {
+      setSortDirRecAcc(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKeyRecAcc(key)
+      setSortDirRecAcc('asc')
+    }
+  }
+
+  function getValueForSortRec(r, key) {
+    switch (key) {
+      case 'albumName': return r.albumName?.toLowerCase() || ''
+      case 'artist': return r.artist?.toLowerCase() || ''
+      case 'year': return r.releaseDate ? new Date(r.releaseDate).getFullYear() : -Infinity
+      case 'from': return getRecommenderName(r.from)?.toLowerCase() || ''
+      default: return ''
+    }
+  }
+
+  const sortedRecommended = [...recommended].sort((a, b) => {
+    const va = getValueForSortRec(a, sortKeyRecPend)
+    const vb = getValueForSortRec(b, sortKeyRecPend)
+    if (va < vb) return sortDirRecPend === 'asc' ? -1 : 1
+    if (va > vb) return sortDirRecPend === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const sortedAcceptedRecs = [...acceptedRecs].sort((a, b) => {
+    const va = getValueForSortRec(a, sortKeyRecAcc)
+    const vb = getValueForSortRec(b, sortKeyRecAcc)
+    if (va < vb) return sortDirRecAcc === 'asc' ? -1 : 1
+    if (va > vb) return sortDirRecAcc === 'asc' ? 1 : -1
+    return 0
+  })
+
   async function recommendTo(album, toUid) {
     if (!user) return toast.error('Accede para recomendar')
     try {
@@ -282,24 +366,10 @@ export default function AlbumsPage() {
   }
 
   return (
-    <Container maxWidth={false} sx={{ px: 3 }}>
-      <Grid container spacing={2} alignItems="center">
-        <Grid item xs={9}>
-          <TextField 
-            fullWidth 
-            value={q} 
-            onChange={e => setQ(e.target.value)} 
-            onKeyPress={e => e.key === 'Enter' && handleSearch()}
-            placeholder={t('Buscar álbumes')} 
-          />
-        </Grid>
-        <Grid item xs={3}>
-          <Button onClick={handleSearch} disabled={searchLoading} variant="contained" color="primary" sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{searchLoading ? t('Buscando...') : 'Buscar'}</Button>
-        </Grid>
-      </Grid>
-
-      <Grid container spacing={4} sx={{ mt: 3 }}>
-        <Grid item xs={12}>
+    <Container maxWidth={false} sx={{ px: 0 }}>
+      <Grid container spacing={0}>
+        {/* Left: Tabs and contents (or bottom on narrow) */}
+        <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, borderRight: isNarrow ? 'none' : '1px solid #333', order: isNarrow ? 2 : 0 }}>
           <ButtonGroup variant="contained" sx={{ mb: 2 }}>
             <Button 
               onClick={() => setActiveTab('myAlbums')} 
@@ -326,7 +396,7 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'news' ? '#1ed760' : '#3a3a3a' }
               }}
             >
-              {t('Novedades')} ({news.length})
+              {t('Novedades')}
             </Button>
             <Button 
               onClick={() => { setActiveTab('concerts'); loadConcertsFromFavorites() }} 
@@ -335,7 +405,7 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'concerts' ? '#1ed760' : '#3a3a3a' }
               }}
             >
-              {t('Conciertos')} ({concerts.length})
+              {t('Conciertos')}
             </Button>
           </ButtonGroup>
 
@@ -352,18 +422,30 @@ export default function AlbumsPage() {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>{t('Portada')}</TableCell>
-                      <TableCell>{t('Nombre')}</TableCell>
-                      <TableCell>{t('Artistas')}</TableCell>
-                      <TableCell>{t('Año')}</TableCell>
-                      <TableCell>{t('Media')}</TableCell>
-                      <TableCell>{t('Mi puntuación')}</TableCell>
-                      <TableCell>{t('Añadido')}</TableCell>
-                      <TableCell>{t('Acciones')}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell onClick={() => toggleSort('name')} sx={{ cursor: 'pointer' }}>
+                        {t('Nombre')} {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell onClick={() => toggleSort('artists')} sx={{ cursor: 'pointer' }}>
+                        {t('Artistas')} {sortKey === 'artists' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
+                        {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
+                        {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell onClick={() => toggleSort('my')} sx={{ cursor: 'pointer' }}>
+                        {t('Mi puntuación')} {sortKey === 'my' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell onClick={() => toggleSort('added')} sx={{ cursor: 'pointer' }}>
+                        {t('Añadido')} {sortKey === 'added' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {myAlbums.map(a => (
+                    {sortedMyAlbums.map(a => (
                       <TableRow key={a.id}>
                         <TableCell>
                           <img 
@@ -435,16 +517,24 @@ export default function AlbumsPage() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>{t('Portada')}</TableCell>
-                        <TableCell>{t('Álbum')}</TableCell>
-                        <TableCell>{t('Artista')}</TableCell>
-                        <TableCell>{t('Año')}</TableCell>
-                        <TableCell>{t('Recomendado por')}</TableCell>
-                        <TableCell>{t('Acciones')}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell onClick={() => toggleSortRecPend('albumName')} sx={{ cursor: 'pointer' }}>
+                          {t('Álbum')} {sortKeyRecPend === 'albumName' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecPend('artist')} sx={{ cursor: 'pointer' }}>
+                          {t('Artista')} {sortKeyRecPend === 'artist' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecPend('year')} sx={{ cursor: 'pointer' }}>
+                          {t('Año')} {sortKeyRecPend === 'year' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecPend('from')} sx={{ cursor: 'pointer' }}>
+                          {t('Recomendado por')} {sortKeyRecPend === 'from' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {recommended.map(r => (
+                      {sortedRecommended.map(r => (
                         <TableRow key={r.id}>
                           <TableCell>
                             <img 
@@ -487,16 +577,24 @@ export default function AlbumsPage() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>{t('Portada')}</TableCell>
-                        <TableCell>{t('Álbum')}</TableCell>
-                        <TableCell>{t('Artista')}</TableCell>
-                        <TableCell>{t('Año')}</TableCell>
-                        <TableCell>{t('Recomendado por')}</TableCell>
-                        <TableCell>{t('Acciones')}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell onClick={() => toggleSortRecAcc('albumName')} sx={{ cursor: 'pointer' }}>
+                          {t('Álbum')} {sortKeyRecAcc === 'albumName' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecAcc('artist')} sx={{ cursor: 'pointer' }}>
+                          {t('Artista')} {sortKeyRecAcc === 'artist' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecAcc('year')} sx={{ cursor: 'pointer' }}>
+                          {t('Año')} {sortKeyRecAcc === 'year' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell onClick={() => toggleSortRecAcc('from')} sx={{ cursor: 'pointer' }}>
+                          {t('Recomendado por')} {sortKeyRecAcc === 'from' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
+                        </TableCell>
+                        <TableCell></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {acceptedRecs.map(r => (
+                      {sortedAcceptedRecs.map(r => (
                         <TableRow key={r.id}>
                           <TableCell>
                             <img 
@@ -582,6 +680,16 @@ export default function AlbumsPage() {
           {activeTab === 'concerts' && (
             <Paper sx={{ p:2 }}>
               <h3>{t('Conciertos de tus favoritos')} ({concerts.length})</h3>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <TextField 
+                  fullWidth 
+                  size="small" 
+                  placeholder={t('Filtrar conciertos por cualquier campo')} 
+                  value={concertsFilter}
+                  onChange={e => setConcertsFilter(e.target.value)}
+                />
+                <Button variant="outlined" onClick={() => setConcertsFilter('')}>{t('Limpiar')}</Button>
+              </Box>
               {concertsLoading && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                   <CircularProgress size={20} />
@@ -589,7 +697,14 @@ export default function AlbumsPage() {
                 </Box>
               )}
               <Grid container spacing={2} sx={{ mt: 1 }}>
-                {concerts.map(ev => (
+                {concerts
+                  .filter(ev => {
+                    if (!concertsFilter) return true
+                    const ql = concertsFilter.toLowerCase()
+                    const fields = [ev.name, ev.artistName, ev.city, ev.venue, ev.date, ev.url]
+                    return fields.filter(Boolean).some(v => String(v).toLowerCase().includes(ql))
+                  })
+                  .map(ev => (
                   <Grid item key={ev.id} xs={12} sm={6} md={4}>
                     <Paper sx={{ p:2 }}>
                       <div style={{ fontWeight: 600 }}>{ev.name}</div>
@@ -617,48 +732,68 @@ export default function AlbumsPage() {
             </Paper>
           )}
         </Grid>
-      </Grid>
 
-      <Grid container spacing={2} sx={{ mt: 3 }} id="results-section">
-        <Grid item xs={12}>
-          <h3>Resultados</h3>
-          {searchLoading && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <CircularProgress size={20} />
-              <span>{t('Buscando...')}</span>
-            </Box>
-          )}
-          <Grid container spacing={2}>
-            {results.map(album => (
-              <Grid item key={album.id} xs={12} sm={6} md={4}>
-                <Paper sx={{ p:2 }}>
-                  <img 
-                    src={album.images?.[0]?.url} 
-                    alt="" 
-                    style={{ width: '100%', height: 160, objectFit: 'cover', cursor: 'pointer' }} 
-                    onClick={() => navigate(`/album/${album.id}`)}
-                  />
-                  <div>
-                    <strong 
-                      style={{ cursor: 'pointer', color: '#1db954', textDecoration: 'underline' }}
-                      onClick={() => navigate(`/album/${album.id}`)}
-                    >
-                      {album.name}
-                    </strong>
-                  </div>
-                  <div>{album.artists.map(a=>a.name).join(', ')}</div>
-                  <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>{album.release_date ? new Date(album.release_date).getFullYear() : ''}</div>
-                  <Button 
-                    variant="contained" 
-                    sx={{ mt:1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} 
-                    onClick={() => saveAlbum(album)}
-                    disabled={myAlbums.some(a => (a.albumId || a.album?.id) === album.id)}
-                  >
-                    {myAlbums.some(a => (a.albumId || a.album?.id) === album.id) ? t('Ya guardado') : t('Guardar')}
-                  </Button>
-                </Paper>
-              </Grid>
-            ))}
+        {/* Right: Search and results (or top on narrow) */}
+        <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, order: isNarrow ? 1 : 0 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={9}>
+              <TextField 
+                fullWidth 
+                value={q} 
+                onChange={e => setQ(e.target.value)} 
+                onKeyPress={e => e.key === 'Enter' && handleSearch()}
+                placeholder={t('Buscar álbumes')} 
+              />
+            </Grid>
+            <Grid item xs={3}>
+              <Button onClick={handleSearch} disabled={searchLoading} variant="contained" color="primary" sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}>{searchLoading ? t('Buscando...') : 'Buscar'}</Button>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2} sx={{ mt: 3 }} id="results-section">
+            <Grid item xs={12}>
+              {q && <h3>{t('Resultados')}</h3>}
+              {searchLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={20} />
+                  <span>{t('Buscando...')}</span>
+                </Box>
+              )}
+              {q && (
+                <Grid container spacing={2}>
+                  {results.map(album => (
+                    <Grid item key={album.id} xs={12} sm={6}>
+                      <Paper sx={{ p:2 }}>
+                        <img 
+                          src={album.images?.[0]?.url} 
+                          alt="" 
+                          style={{ width: '100%', height: 160, objectFit: 'cover', cursor: 'pointer' }} 
+                          onClick={() => navigate(`/album/${album.id}`)}
+                        />
+                        <div>
+                          <strong 
+                            style={{ cursor: 'pointer', color: '#1db954', textDecoration: 'underline' }}
+                            onClick={() => navigate(`/album/${album.id}`)}
+                          >
+                            {album.name}
+                          </strong>
+                        </div>
+                        <div>{album.artists.map(a=>a.name).join(', ')}</div>
+                        <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>{album.release_date ? new Date(album.release_date).getFullYear() : ''}</div>
+                        <Button 
+                          variant="contained" 
+                          sx={{ mt:1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }} 
+                          onClick={() => saveAlbum(album)}
+                          disabled={myAlbums.some(a => (a.albumId || a.album?.id) === album.id)}
+                        >
+                          {myAlbums.some(a => (a.albumId || a.album?.id) === album.id) ? t('Ya guardado') : t('Guardar')}
+                        </Button>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </Grid>
           </Grid>
         </Grid>
       </Grid>
