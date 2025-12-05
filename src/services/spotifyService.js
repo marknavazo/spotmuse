@@ -71,3 +71,11 @@ export async function getArtistAlbums(artistId, options = {}) {
   });
   return res.data.items;
 }
+
+export async function getArtistById(artistId) {
+  const token = await getAccessToken();
+  const res = await axios.get(`${SPOTIFY_BASE}/artists/${artistId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}

@@ -24,6 +24,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import toast from 'react-hot-toast';
 import {
   collection,
@@ -60,6 +62,11 @@ export default function AlbumDetail() {
   const [lyricsTrack, setLyricsTrack] = useState(null);
   const [lyricsText, setLyricsText] = useState('');
   const [loadingLyrics, setLoadingLyrics] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editingText, setEditingText] = useState('');
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -180,6 +187,84 @@ export default function AlbumDetail() {
     });
     return () => unsub();
   }, [album?.id]);
+
+  // Subscribe to comments for this album and show mine + people I follow
+  useEffect(() => {
+    if (!album?.id || !user) return;
+    setCommentsLoading(true);
+    const cRef = collection(db, 'comments');
+    const qC = query(cRef, where('albumId', '==', album.id));
+    const unsub = onSnapshot(qC, (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // Allowed UIDs: me + my friends I follow
+      const allowed = new Set([user.uid, ...friends.map((f) => f.friendUid)]);
+      const filtered = items
+        .filter((c) => allowed.has(c.uid))
+        .sort((a, b) => {
+          const ta = a.createdAt?.toDate
+            ? a.createdAt.toDate().getTime()
+            : Date.parse(a.createdAt || 0) || 0;
+          const tb = b.createdAt?.toDate
+            ? b.createdAt.toDate().getTime()
+            : Date.parse(b.createdAt || 0) || 0;
+          return tb - ta;
+        });
+      setComments(filtered);
+      setCommentsLoading(false);
+    });
+    return () => unsub();
+  }, [album?.id, user, friends]);
+
+  async function addComment() {
+    if (!user || !album) return toast.error(t('Accede para comentar'));
+    const text = newComment.trim();
+    if (!text) return;
+    try {
+      await addDoc(collection(db, 'comments'), {
+        albumId: album.id,
+        uid: user.uid,
+        text,
+        createdAt: serverTimestamp(),
+        edited: false,
+      });
+      setNewComment('');
+      toast.success(t('Comentario añadido'));
+    } catch (_e) {
+      toast.error(t('Error al añadir comentario'));
+    }
+  }
+
+  async function deleteComment(id) {
+    try {
+      await deleteDoc(doc(db, 'comments', id));
+      toast.success(t('Comentario eliminado'));
+    } catch (_e) {
+      toast.error(t('Error al eliminar comentario'));
+    }
+  }
+
+  function startEditComment(c) {
+    setEditingId(c.id);
+    setEditingText(c.text || '');
+  }
+
+  async function saveEditComment() {
+    if (!editingId) return;
+    const text = editingText.trim();
+    if (!text) return;
+    try {
+      await setDoc(
+        doc(db, 'comments', editingId),
+        { text, edited: true, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+      setEditingId(null);
+      setEditingText('');
+      toast.success(t('Comentario editado'));
+    } catch (_e) {
+      toast.error(t('Error al editar comentario'));
+    }
+  }
 
   async function saveAlbum() {
     if (!user || !album) return toast.error(t('Accede para guardar álbumes'));
@@ -511,7 +596,161 @@ export default function AlbumDetail() {
             ))}
           </List>
         ) : (
-          <Typography color="text.secondary">{t('No hay canciones disponibles')}</Typography>
+          <Typography color="text.secondary">{t('No disponible')}</Typography>
+        )}
+      </Paper>
+
+      {/* Comments section */}
+      <Paper sx={{ p: 3, mt: 2 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t('Comentarios')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder={t('Escribe un comentario')}
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+          />
+          <Button
+            variant="contained"
+            sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+            onClick={addComment}
+          >
+            {t('Añadir')}
+          </Button>
+        </Box>
+        {commentsLoading ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={20} />
+            <span>{t('Cargando...')}</span>
+          </Box>
+        ) : comments.length === 0 ? (
+          <Typography color="text.secondary">{t('No hay comentarios')}</Typography>
+        ) : (
+          <List dense>
+            {comments.map((c) => {
+              const author =
+                c.uid === user?.uid
+                  ? t('Tú')
+                  : friends.find((f) => f.friendUid === c.uid)?.friendName || c.uid;
+              const ts = c.createdAt?.toDate
+                ? new Date(c.createdAt.toDate()).toLocaleString()
+                : c.createdAt
+                  ? new Date(c.createdAt).toLocaleString()
+                  : '';
+              const editedFlag = c.edited ? ` (${t('editado')})` : '';
+              const isMine = c.uid === user?.uid;
+              return (
+                <ListItem
+                  key={c.id}
+                  alignItems="flex-start"
+                  sx={{ alignItems: 'flex-start' }}
+                  secondaryAction={
+                    isMine && editingId !== c.id ? (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {editingId === c.id ? (
+                          <>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                              onClick={saveEditComment}
+                            >
+                              {t('Guardar')}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              onClick={() => {
+                                setEditingId(null);
+                                setEditingText('');
+                              }}
+                            >
+                              {t('Cancelar')}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <IconButton
+                              size="small"
+                              aria-label={t('Editar')}
+                              onClick={() => startEditComment(c)}
+                              sx={{ color: '#1db954' }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              aria-label={t('Eliminar')}
+                              onClick={() => deleteComment(c.id)}
+                              sx={{ color: '#ff4d4f' }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </>
+                        )}
+                      </Box>
+                    ) : null
+                  }
+                >
+                  {editingId === c.id ? (
+                    <Box sx={{ width: '100%', pr: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        autoFocus
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            saveEditComment();
+                          } else if (e.key === 'Escape') {
+                            setEditingId(null);
+                            setEditingText('');
+                          }
+                        }}
+                      />
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                          onClick={saveEditComment}
+                        >
+                          {t('Guardar')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => {
+                            setEditingId(null);
+                            setEditingText('');
+                          }}
+                        >
+                          {t('Cancelar')}
+                        </Button>
+                      </Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mt: 0.5, display: 'block' }}
+                      >
+                        {author} • {ts}
+                        {editedFlag}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <ListItemText primary={c.text} secondary={`${author} • ${ts}${editedFlag}`} />
+                  )}
+                </ListItem>
+              );
+            })}
+          </List>
         )}
       </Paper>
 

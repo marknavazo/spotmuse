@@ -17,9 +17,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
   CircularProgress,
   Box,
   useMediaQuery,
+  Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import {
@@ -434,7 +439,31 @@ export default function AlbumsPage() {
     }
   }
 
-  const sortedMyAlbums = [...myAlbums].sort((a, b) => {
+  // Combine saved albums with accepted recommendations (even if not saved),
+  // preferring the saved album entry when duplicates by albumId exist.
+  const acceptedAsAlbums = acceptedRecs.map((r) => ({
+    id: r.id,
+    owner: user?.uid,
+    albumId: r.albumId,
+    name: r.albumName,
+    artists: r.artist,
+    images: r.images || [],
+    releaseDate: r.releaseDate,
+    addedAt: r.createdAt || r.acceptedAt || null,
+    viaRecommendation: true,
+    recommendedBy: r.from,
+  }));
+  const byId = new Map();
+  acceptedAsAlbums.forEach((a) => {
+    if (!byId.has(a.albumId)) byId.set(a.albumId, a);
+  });
+  myAlbums.forEach((a) => {
+    // overwrite with real saved album
+    byId.set(a.albumId, a);
+  });
+  const myAlbumsCombined = Array.from(byId.values());
+
+  const sortedMyAlbums = [...myAlbumsCombined].sort((a, b) => {
     const va = getValueForSort(a, sortKey);
     const vb = getValueForSort(b, sortKey);
     if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -579,7 +608,7 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'myAlbums' ? '#1ed760' : '#3a3a3a' },
               }}
             >
-              {t('Mis álbumes')} ({myAlbums.length})
+              {t('Mis álbumes')} ({myAlbumsCombined.length})
             </Button>
             <Button
               onClick={() => setActiveTab('recommended')}
@@ -628,7 +657,7 @@ export default function AlbumsPage() {
           {activeTab === 'myAlbums' && (
             <Paper sx={{ p: 2 }}>
               <h3>
-                {t('Mis álbumes')} ({myAlbums.length})
+                {t('Mis álbumes')} ({myAlbumsCombined.length})
               </h3>
               <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                 <TextField
@@ -679,7 +708,7 @@ export default function AlbumsPage() {
                       <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
                         {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
-                      <TableCell>{t('Añadido por')}</TableCell>
+                      <TableCell>{t('Recomendado por')}</TableCell>
                       <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
                         {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
@@ -748,13 +777,9 @@ export default function AlbumsPage() {
                           {a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}
                         </TableCell>
                         <TableCell>
-                          {ownersByAlbumId[a.albumId]?.length ? (
-                            <span>
-                              {ownersByAlbumId[a.albumId].length} {t('personas')}
-                            </span>
-                          ) : (
-                            '-'
-                          )}
+                          {a.viaRecommendation && a.recommendedBy
+                            ? getRecommenderName(a.recommendedBy)
+                            : '-'}
                         </TableCell>
                         <TableCell>
                           {typeof avgRatings[a.albumId] === 'number'
@@ -1469,21 +1494,23 @@ export default function AlbumsPage() {
               </Grid>
             </Paper>
           )}
-          <Button
-            variant="contained"
-            sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-            onClick={() =>
-              saveAlbum({
-                id: selectedAlbum.id,
-                name: selectedAlbum.name,
-                artists: selectedAlbum.artists,
-                images: selectedAlbum.images,
-                release_date: selectedAlbum.release_date,
-              })
-            }
-          >
-            {t('Añadir a mi colección')}
-          </Button>
+          {/* Friend selection should appear here; removed misplaced add-to-collection button */}
+          {friends && friends.length > 0 ? (
+            <List>
+              {friends.map((friend) => (
+                <ListItem key={friend.id} disablePadding>
+                  <ListItemButton
+                    onClick={() => _recommendTo(selectedAlbum, friend.friendUid)}
+                    sx={{ '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' }, borderRadius: 1 }}
+                  >
+                    <ListItemText primary={friend.friendName} secondary={friend.friendUid} />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography color="text.secondary">{t('No tienes amigos añadidos aún')}</Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button

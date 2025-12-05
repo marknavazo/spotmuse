@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -10,8 +10,7 @@ import {
   createTheme,
   CssBaseline,
 } from '@mui/material';
-import { Toaster } from 'react-hot-toast';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
@@ -29,6 +28,10 @@ import auth, { logout } from './firebase/auth';
 import './i18n';
 import Error404 from './components/Error404';
 import { db } from './firebase/firestore';
+import Top100Page from './components/albums/Top100Page';
+import GroupsPage from './components/artists/GroupsPage';
+import Home from './components/home/Home';
+import Feed from './components/feed/Feed';
 
 const darkTheme = createTheme({
   palette: {
@@ -46,7 +49,7 @@ const darkTheme = createTheme({
 function App() {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const location = useLocation();
+
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
@@ -63,19 +66,8 @@ function App() {
     });
   }, [i18n]);
 
-  // Restore last route on initial mount if redirected to '/'
-  useEffect(() => {
-    const path = location.pathname + location.search + location.hash;
-    if (path === '/') {
-      const last = sessionStorage.getItem('lastRoute');
-      if (last && last !== '/') {
-        navigate(last, { replace: true });
-      }
-    } else {
-      // Save current route (non-root) so we can restore it on refresh
-      sessionStorage.setItem('lastRoute', path);
-    }
-  }, [location.pathname, location.search, location.hash, navigate]);
+  // Remove last route restore to let '/' show Feed reliably
+  // (If needed, implement a more explicit deep-link restore later)
 
   async function handleLogout() {
     try {
@@ -96,20 +88,29 @@ function App() {
           <Typography
             variant="h6"
             component={Link}
-            to="/albums"
+            to="/"
             sx={{ color: 'inherit', textDecoration: 'none', flexGrow: 1 }}
           >
             {t('SpotMuse')}
           </Typography>
           {user ? (
             <>
-              <Button color="inherit" component={Link} to="/albums">
+              <Button color="inherit" component={Link} to="/feed" sx={{ ml: 1 }}>
+                {t('Feed')}
+              </Button>
+              <Button color="inherit" component={Link} to="/albums" sx={{ ml: 1 }}>
                 {t('Álbumes')}
               </Button>
-              <Button color="inherit" component={Link} to="/friends">
+              <Button color="inherit" component={Link} to="/top" sx={{ ml: 1 }}>
+                TOP 100
+              </Button>
+              <Button color="inherit" component={Link} to="/groups" sx={{ ml: 1 }}>
+                {t('Grupos')}
+              </Button>
+              <Button color="inherit" component={Link} to="/friends" sx={{ ml: 1 }}>
                 {t('Amigos')}
               </Button>
-              <Button color="inherit" component={Link} to="/profile">
+              <Button color="inherit" component={Link} to="/profile" sx={{ ml: 1 }}>
                 {t('Perfil')}
               </Button>
               <Button
@@ -131,18 +132,37 @@ function App() {
       <Toolbar />
       <Container maxWidth={false} sx={{ mt: 0, px: 0 }}>
         <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/top" element={<Top100Page />} />
           <Route
-            path="/"
+            path="/groups"
             element={
-              <Typography>{t('Bienvenido a SpotMuse — comparte y descubre álbumes')}</Typography>
+              <ProtectedRoute>
+                <GroupsPage />
+              </ProtectedRoute>
             }
           />
-          <Route path="/login" element={<Login />} />
           <Route
             path="/profile"
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/feed"
+            element={
+              <ProtectedRoute>
+                <Feed />
               </ProtectedRoute>
             }
           />

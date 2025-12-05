@@ -281,6 +281,14 @@ export default function ProfilePage() {
               {artistResults.map((ar) => (
                 <ListItem
                   key={ar.id}
+                  disableGutters
+                  sx={{
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+                    borderRadius: 1,
+                  }}
                   secondaryAction={
                     <Button
                       variant="outlined"
@@ -298,6 +306,7 @@ export default function ProfilePage() {
                     onClick={() =>
                       window.open(`https://open.spotify.com/artist/${ar.id}`, '_blank')
                     }
+                    sx={{ width: '100%', '&:hover': { bgcolor: 'transparent' } }}
                   >
                     <ListItemText
                       primary={ar.name}

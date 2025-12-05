@@ -115,8 +115,8 @@ export default function FriendsPage() {
 
   return (
     <Container maxWidth={false} sx={{ px: 3 }}>
-      {/* Spacer for fixed header */}
-      <Box sx={{ height: (theme) => theme.mixins.toolbar }} />
+      {/* Small spacer for fixed header consistency */}
+      <Box sx={{ height: (theme) => theme.spacing(2) }} />
       <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
         <Grid item xs={9}>
           <TextField
