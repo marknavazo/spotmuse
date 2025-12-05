@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Container, Typography, Paper, Grid, Button, Avatar, Box } from '@mui/material';
+import { Container, Typography, Paper, Grid, Button, Avatar, Box, IconButton } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  onSnapshot,
+} from 'firebase/firestore';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
 
 import { db } from '../../firebase/firestore';
@@ -17,6 +27,8 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const currentUser = auth.currentUser;
   const { t } = useTranslation();
+  const [avgRatings, setAvgRatings] = useState({});
+  const [ownersByAlbumId, setOwnersByAlbumId] = useState({});
 
   useEffect(() => {
     async function loadUserData() {
@@ -40,6 +52,39 @@ export default function UserProfilePage() {
     }
     loadUserData();
   }, [userId, t]);
+
+  // Subscribe to ratings to compute global averages
+  useEffect(() => {
+    const ratingsRef = collection(db, 'ratings');
+    const unsub = onSnapshot(ratingsRef, (snap) => {
+      const totals = {};
+      const counts = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (!data.albumId || typeof data.value !== 'number') return;
+        totals[data.albumId] = (totals[data.albumId] || 0) + data.value;
+        counts[data.albumId] = (counts[data.albumId] || 0) + 1;
+      });
+      const avgMap = {};
+      Object.keys(totals).forEach((id) => {
+        avgMap[id] = totals[id] / counts[id];
+      });
+      setAvgRatings(avgMap);
+    });
+    return () => unsub();
+  }, []);
+
+  // Refresh owners count for albums displayed on this profile
+  useEffect(() => {
+    async function refreshOwners() {
+      const ids = new Set(userAlbums.map((a) => a.albumId));
+      for (const id of ids) {
+        const snap = await getDocs(query(collection(db, 'albums'), where('albumId', '==', id)));
+        setOwnersByAlbumId((prev) => ({ ...prev, [id]: snap.docs.map((d) => d.data().owner) }));
+      }
+    }
+    if (userAlbums.length) refreshOwners();
+  }, [userAlbums]);
 
   async function addAlbumToMyCollection(album) {
     try {
@@ -147,16 +192,16 @@ export default function UserProfilePage() {
         {t('Álbumes de {{name}}', { name: userProfile?.fullName || t('Usuario') })}
       </Typography>
 
-      <Grid container spacing={2}>
+      <Grid container spacing={2} columns={12}>
         {userAlbums.map((album) => (
-          <Grid item key={album.id} xs={12} sm={6} md={3}>
+          <Grid item key={album.id} xs={12} sm={6} md={2}>
             <Paper sx={{ p: 2 }}>
               <img
                 src={album.images?.[0]?.url || album.images?.[2]?.url}
                 alt={album.name}
                 style={{
                   width: '100%',
-                  height: 200,
+                  aspectRatio: '1 / 1',
                   objectFit: 'cover',
                   borderRadius: 4,
                   cursor: 'pointer',
@@ -171,16 +216,43 @@ export default function UserProfilePage() {
                   cursor: 'pointer',
                   color: '#1db954',
                   textDecoration: 'underline',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'block',
                 }}
                 onClick={() => navigate(`/album/${album.albumId}`)}
+                title={album.name}
               >
                 {album.name}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'block',
+                }}
+                title={album.artists}
+              >
                 {album.artists}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.9em' }}>
                 {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {t('Media')}:{' '}
+                {typeof avgRatings[album.albumId] === 'number'
+                  ? Number(avgRatings[album.albumId]).toFixed(1)
+                  : '-'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {t('Añadido por')}:{' '}
+                {ownersByAlbumId[album.albumId]?.length
+                  ? `${ownersByAlbumId[album.albumId].length} ${t('personas')}`
+                  : '-'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
                 <Button
@@ -193,19 +265,15 @@ export default function UserProfilePage() {
                 >
                   {t('Añadir a mi colección')}
                 </Button>
-                <Button
-                  variant="outlined"
-                  sx={{
-                    color: '#1db954',
-                    borderColor: '#1db954',
-                    '&:hover': { borderColor: '#1ed760' },
-                  }}
+                <IconButton
                   onClick={() =>
                     window.open(`https://open.spotify.com/album/${album.albumId}`, '_blank')
                   }
+                  sx={{ color: '#1db954' }}
+                  aria-label={t('Escuchar en Spotify')}
                 >
-                  {t('Play')}
-                </Button>
+                  <PlayArrowIcon />
+                </IconButton>
               </Box>
             </Paper>
           </Grid>

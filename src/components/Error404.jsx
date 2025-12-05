@@ -16,7 +16,7 @@ export default function Error404() {
       <Button
         variant="contained"
         sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-        onClick={() => navigate('/')}
+        onClick={() => navigate('/albums')}
       >
         {t('Volver al inicio')}
       </Button>

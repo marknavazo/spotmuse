@@ -17,10 +17,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemButton,
   CircularProgress,
   Box,
   useMediaQuery,
@@ -70,6 +66,13 @@ export default function AlbumsPage() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [concerts, setConcerts] = useState([]);
   const [concertsLoading, setConcertsLoading] = useState(false);
+  const [lists, setLists] = useState([]);
+  const [listsLoading, setListsLoading] = useState(false);
+  const [listAlbumCounts, setListAlbumCounts] = useState({});
+  const [newListName, setNewListName] = useState('');
+  const [editingListId, setEditingListId] = useState(null);
+  const [editingListName, setEditingListName] = useState('');
+  const [ownersByAlbumId, setOwnersByAlbumId] = useState({});
   const [concertsFilter, setConcertsFilter] = useState('');
   const [myRatings, setMyRatings] = useState({});
   const [avgRatings, setAvgRatings] = useState({});
@@ -79,6 +82,7 @@ export default function AlbumsPage() {
   const [sortDirRecPend, setSortDirRecPend] = useState('asc');
   const [sortKeyRecAcc, setSortKeyRecAcc] = useState('albumName');
   const [sortDirRecAcc, setSortDirRecAcc] = useState('asc');
+  const [myFilter, setMyFilter] = useState('');
   const token = import.meta.env.VITE_SPOTIFY_TOKEN;
   const user = auth.currentUser;
   const isNarrow = useMediaQuery('(max-width:1500px)');
@@ -111,11 +115,33 @@ export default function AlbumsPage() {
       setFriends(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setFriendsLoading(false);
     });
+    // subscribe to my lists
+    const listsRef = collection(db, 'lists');
+    const ql = query(listsRef, where('owner', '==', user.uid));
+    const unsubLists = onSnapshot(ql, (snap) => {
+      setLists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setListsLoading(false);
+    });
+    // subscribe to listAlbums for counts per list
+    const listAlbumsRef = collection(db, 'listAlbums');
+    const qla = query(listAlbumsRef, where('owner', '==', user.uid));
+    const unsubListAlbums = onSnapshot(qla, (snap) => {
+      const counts = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        const lid = data.listId;
+        if (!lid) return;
+        counts[lid] = (counts[lid] || 0) + 1;
+      });
+      setListAlbumCounts(counts);
+    });
     return () => {
       unsubMy();
       unsubRec();
       unsubRecAccepted();
       unsubFriends();
+      unsubLists();
+      unsubListAlbums();
     };
   }, [user]);
 
@@ -226,6 +252,51 @@ export default function AlbumsPage() {
     }
   }
 
+  async function createList() {
+    if (!user) return;
+    const name = newListName.trim();
+    if (!name) return toast.error(t('Nombre de lista requerido'));
+    try {
+      await addDoc(collection(db, 'lists'), {
+        owner: user.uid,
+        name,
+        createdAt: new Date().toISOString(),
+      });
+      setNewListName('');
+      toast.success(t('Lista creada'));
+    } catch (_e) {
+      toast.error(t('Error al crear lista'));
+    }
+  }
+
+  async function deleteList(id) {
+    try {
+      await deleteDoc(doc(db, 'lists', id));
+      toast.success(t('Lista eliminada'));
+    } catch (_e) {
+      toast.error(t('Error al eliminar lista'));
+    }
+  }
+
+  async function startEditList(list) {
+    setEditingListId(list.id);
+    setEditingListName(list.name || '');
+  }
+
+  async function saveEditList() {
+    if (!editingListId) return;
+    const name = editingListName.trim();
+    if (!name) return toast.error(t('Nombre de lista requerido'));
+    try {
+      await setDoc(doc(db, 'lists', editingListId), { name }, { merge: true });
+      setEditingListId(null);
+      setEditingListName('');
+      toast.success(t('Lista actualizada'));
+    } catch (_e) {
+      toast.error(t('Error al actualizar lista'));
+    }
+  }
+
   async function saveAlbum(album) {
     if (!user) return;
     try {
@@ -259,8 +330,38 @@ export default function AlbumsPage() {
         addedAt: serverTimestamp(),
       });
       toast.success(t('Álbum guardado'));
+      // Refresh owners for this album
+      await refreshOwnersForAlbum(albumId);
     } catch (_error) {
       toast.error(t('Error al guardar álbum'));
+    }
+  }
+
+  async function _addAlbumToList(listId, album) {
+    if (!user) return;
+    if (!listId) return;
+    try {
+      const albumId = album.albumId || album.id;
+      // prevent duplicates within list
+      const name = album.name;
+      const artists = Array.isArray(album.artists)
+        ? album.artists.map((a) => a.name ?? a).join(', ')
+        : album.artists || '';
+      const images = album.images || [];
+      const releaseDate = album.releaseDate || album.release_date || null;
+      await addDoc(collection(db, 'listAlbums'), {
+        owner: user.uid,
+        listId,
+        albumId,
+        name,
+        artists,
+        images,
+        releaseDate,
+        createdAt: serverTimestamp(),
+      });
+      toast.success(t('Álbum añadido a la lista'));
+    } catch (_e) {
+      toast.error(t('Error al añadir a la lista'));
     }
   }
 
@@ -268,10 +369,40 @@ export default function AlbumsPage() {
     try {
       await deleteDoc(doc(db, 'albums', albumId));
       toast.success('Álbum eliminado');
+      // Refresh owners map after deletion
+      await refreshAllOwners();
     } catch (_error) {
       toast.error('Error al eliminar álbum');
     }
   }
+
+  async function refreshOwnersForAlbum(albumId) {
+    try {
+      const snap = await getDocs(query(collection(db, 'albums'), where('albumId', '==', albumId)));
+      const owners = snap.docs.map((d) => d.data().owner).filter(Boolean);
+      setOwnersByAlbumId((prev) => ({ ...prev, [albumId]: owners }));
+    } catch (_e) {}
+  }
+
+  async function refreshAllOwners() {
+    try {
+      // Build a set of albumIds currently visible across lists
+      const albumIds = new Set();
+      myAlbums.forEach((a) => albumIds.add(a.albumId));
+      results.forEach((r) => albumIds.add(r.albumId || r.id));
+      recommended.forEach((rec) => albumIds.add(rec.albumId));
+      acceptedRecs.forEach((rec) => albumIds.add(rec.albumId));
+      for (const id of albumIds) {
+        await refreshOwnersForAlbum(id);
+      }
+    } catch (_e) {}
+  }
+
+  useEffect(() => {
+    // Whenever lists change, refresh owners map for visible items
+    refreshAllOwners();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAlbums, results, recommended, acceptedRecs]);
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -309,6 +440,12 @@ export default function AlbumsPage() {
     if (va < vb) return sortDir === 'asc' ? -1 : 1;
     if (va > vb) return sortDir === 'asc' ? 1 : -1;
     return 0;
+  });
+  const filteredMyAlbums = sortedMyAlbums.filter((a) => {
+    if (!myFilter) return true;
+    const ql = myFilter.toLowerCase();
+    const fields = [a.name, a.artists, a.releaseDate, a.albumId];
+    return fields.filter(Boolean).some((v) => String(v).toLowerCase().includes(ql));
   });
 
   function toggleSortRecPend(key) {
@@ -360,7 +497,7 @@ export default function AlbumsPage() {
     return 0;
   });
 
-  async function recommendTo(album, toUid) {
+  async function _recommendTo(album, toUid) {
     if (!user) return toast.error('Accede para recomendar');
     try {
       await addDoc(collection(db, 'recommendations'), {
@@ -477,6 +614,15 @@ export default function AlbumsPage() {
             >
               {t('Conciertos')}
             </Button>
+            <Button
+              onClick={() => setActiveTab('lists')}
+              sx={{
+                bgcolor: activeTab === 'lists' ? '#1db954' : '#2a2a2a',
+                '&:hover': { bgcolor: activeTab === 'lists' ? '#1ed760' : '#3a3a3a' },
+              }}
+            >
+              {t('Listas')} ({lists.length})
+            </Button>
           </ButtonGroup>
 
           {activeTab === 'myAlbums' && (
@@ -484,6 +630,28 @@ export default function AlbumsPage() {
               <h3>
                 {t('Mis álbumes')} ({myAlbums.length})
               </h3>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder={t('Buscar en mis álbumes')}
+                  value={myFilter}
+                  onChange={(e) => setMyFilter(e.target.value)}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={() => setMyFilter('')}
+                  sx={{
+                    borderColor: '#1db954',
+                    color: '#1db954',
+                    fontWeight: 600,
+                    px: 2,
+                    '&:hover': { borderColor: '#1ed760', bgcolor: 'rgba(29,185,84,0.1)' },
+                  }}
+                >
+                  {t('Limpiar')}
+                </Button>
+              </Box>
               {myLoading && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                   <CircularProgress size={20} />
@@ -495,16 +663,23 @@ export default function AlbumsPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell></TableCell>
-                      <TableCell onClick={() => toggleSort('name')} sx={{ cursor: 'pointer' }}>
+                      <TableCell
+                        onClick={() => toggleSort('name')}
+                        sx={{ cursor: 'pointer', width: 200 }}
+                      >
                         {t('Nombre')} {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
-                      <TableCell onClick={() => toggleSort('artists')} sx={{ cursor: 'pointer' }}>
+                      <TableCell
+                        onClick={() => toggleSort('artists')}
+                        sx={{ cursor: 'pointer', width: 220 }}
+                      >
                         {t('Artistas')}{' '}
                         {sortKey === 'artists' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
                       <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
                         {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
+                      <TableCell>{t('Añadido por')}</TableCell>
                       <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
                         {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
@@ -519,7 +694,7 @@ export default function AlbumsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {sortedMyAlbums.map((a) => (
+                    {filteredMyAlbums.map((a) => (
                       <TableRow key={a.id}>
                         <TableCell>
                           <img
@@ -535,26 +710,35 @@ export default function AlbumsPage() {
                             onClick={() => navigate(`/album/${a.albumId}`)}
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ maxWidth: 200 }}>
                           <span
                             style={{
                               cursor: 'pointer',
                               color: '#1db954',
                               textDecoration: 'underline',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: 'inline-block',
+                              maxWidth: '100%',
                             }}
                             onClick={() => navigate(`/album/${a.albumId}`)}
                           >
                             {a.name}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ maxWidth: 220 }}>
                           <span
                             onClick={() => searchByArtist(a.artists)}
                             style={{
                               cursor: 'pointer',
                               color: '#1db954',
                               textDecoration: 'underline',
-                              '&:hover': { color: '#1ed760' },
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: 'inline-block',
+                              maxWidth: '100%',
                             }}
                           >
                             {a.artists}
@@ -564,9 +748,22 @@ export default function AlbumsPage() {
                           {a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}
                         </TableCell>
                         <TableCell>
-                          {avgRatings[a.albumId] ? avgRatings[a.albumId].toFixed(1) : '-'}
+                          {ownersByAlbumId[a.albumId]?.length ? (
+                            <span>
+                              {ownersByAlbumId[a.albumId].length} {t('personas')}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
-                        <TableCell>{myRatings[a.albumId] ?? '-'}</TableCell>
+                        <TableCell>
+                          {typeof avgRatings[a.albumId] === 'number'
+                            ? Number(avgRatings[a.albumId]).toFixed(1)
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {typeof myRatings[a.albumId] === 'number' ? myRatings[a.albumId] : '-'}
+                        </TableCell>
                         <TableCell>
                           {a.addedAt?.toDate
                             ? new Date(a.addedAt.toDate()).toLocaleDateString()
@@ -644,6 +841,8 @@ export default function AlbumsPage() {
                           {t('Año')}{' '}
                           {sortKeyRecPend === 'year' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
                         </TableCell>
+                        <TableCell>{t('Añadido por')}</TableCell>
+                        <TableCell>{t('Media')}</TableCell>
                         <TableCell
                           onClick={() => toggleSortRecPend('from')}
                           sx={{ cursor: 'pointer' }}
@@ -661,7 +860,14 @@ export default function AlbumsPage() {
                             <img
                               src={r.images?.[2]?.url || r.images?.[0]?.url}
                               alt={r.albumName}
-                              style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }}
+                              style={{
+                                width: 50,
+                                height: 50,
+                                objectFit: 'cover',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => navigate(`/album/${r.albumId}`)}
                             />
                           </TableCell>
                           <TableCell>
@@ -679,6 +885,16 @@ export default function AlbumsPage() {
                           <TableCell>{r.artist}</TableCell>
                           <TableCell>
                             {r.releaseDate ? new Date(r.releaseDate).getFullYear() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {ownersByAlbumId[r.albumId]?.length
+                              ? `${ownersByAlbumId[r.albumId].length} ${t('personas')}`
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {typeof avgRatings[r.albumId] === 'number'
+                              ? Number(avgRatings[r.albumId]).toFixed(1)
+                              : '-'}
                           </TableCell>
                           <TableCell>{getRecommenderName(r.from)}</TableCell>
                           <TableCell>
@@ -737,6 +953,8 @@ export default function AlbumsPage() {
                           {t('Año')}{' '}
                           {sortKeyRecAcc === 'year' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
                         </TableCell>
+                        <TableCell>{t('Añadido por')}</TableCell>
+                        <TableCell>{t('Media')}</TableCell>
                         <TableCell
                           onClick={() => toggleSortRecAcc('from')}
                           sx={{ cursor: 'pointer' }}
@@ -754,13 +972,41 @@ export default function AlbumsPage() {
                             <img
                               src={r.images?.[2]?.url || r.images?.[0]?.url}
                               alt={r.albumName}
-                              style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }}
+                              style={{
+                                width: 50,
+                                height: 50,
+                                objectFit: 'cover',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => navigate(`/album/${r.albumId}`)}
                             />
                           </TableCell>
-                          <TableCell>{r.albumName}</TableCell>
+                          <TableCell>
+                            <span
+                              style={{
+                                cursor: 'pointer',
+                                color: '#1db954',
+                                textDecoration: 'underline',
+                              }}
+                              onClick={() => navigate(`/album/${r.albumId}`)}
+                            >
+                              {r.albumName}
+                            </span>
+                          </TableCell>
                           <TableCell>{r.artist}</TableCell>
                           <TableCell>
                             {r.releaseDate ? new Date(r.releaseDate).getFullYear() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {ownersByAlbumId[r.albumId]?.length
+                              ? `${ownersByAlbumId[r.albumId].length} ${t('personas')}`
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {typeof avgRatings[r.albumId] === 'number'
+                              ? Number(avgRatings[r.albumId]).toFixed(1)
+                              : '-'}
                           </TableCell>
                           <TableCell>{getRecommenderName(r.from)}</TableCell>
                           <TableCell>
@@ -796,41 +1042,79 @@ export default function AlbumsPage() {
                   <span>{t('Cargando...')}</span>
                 </Box>
               )}
-              <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={1} sx={{ mt: 1 }}>
                 {news.map((album) => (
-                  <Grid item key={album.id} xs={12} sm={6} md={4}>
+                  <Grid item key={album.id} xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2 }}>
                       <img
                         src={album.images?.[0]?.url}
                         alt=""
                         style={{
                           width: '100%',
-                          height: 160,
+                          aspectRatio: '1 / 1',
                           objectFit: 'cover',
                           cursor: 'pointer',
                         }}
                         onClick={() => navigate(`/album/${album.id}`)}
                       />
-                      <div>
+                      <div
+                        style={{
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
                         <strong
                           style={{
                             cursor: 'pointer',
                             color: '#1db954',
                             textDecoration: 'underline',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: 'inline-block',
+                            maxWidth: '100%',
                           }}
                           onClick={() => navigate(`/album/${album.id}`)}
+                          title={album.name}
                         >
                           {album.name}
                         </strong>
                       </div>
-                      <div>{album.artists?.map((a) => a.name).join(', ')}</div>
+                      <div
+                        style={{
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        title={album.artists?.map((a) => a.name).join(', ')}
+                      >
+                        {album.artists?.map((a) => a.name).join(', ')}
+                      </div>
                       <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>
                         {album.release_date ? new Date(album.release_date).getFullYear() : ''}
                       </div>
-                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <IconButton
+                          onClick={() => {
+                            const url =
+                              album.external_urls?.spotify ||
+                              `https://open.spotify.com/album/${album.id}`;
+                            window.open(url, '_blank');
+                          }}
+                          sx={{
+                            color: '#1db954',
+                            mt: 1,
+                            display: 'inline-flex',
+                            alignSelf: 'flex-start',
+                          }}
+                          aria-label={t('Escuchar en Spotify')}
+                        >
+                          <PlayArrowIcon />
+                        </IconButton>
                         <Button
                           variant="contained"
-                          sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                          sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
                           onClick={() =>
                             saveAlbum({
                               id: album.id,
@@ -840,24 +1124,11 @@ export default function AlbumsPage() {
                               release_date: album.release_date,
                             })
                           }
+                          disabled={myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)}
                         >
-                          {t('Guardar')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          sx={{
-                            borderColor: '#1db954',
-                            color: '#1db954',
-                            '&:hover': { borderColor: '#1ed760', color: '#1ed760' },
-                          }}
-                          onClick={() => {
-                            const url =
-                              album.external_urls?.spotify ||
-                              `https://open.spotify.com/album/${album.id}`;
-                            window.open(url, '_blank');
-                          }}
-                        >
-                          {t('Escuchar en Spotify')}
+                          {myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)
+                            ? t('Ya en tu colección')
+                            : t('Añadir a mi colección')}
                         </Button>
                       </Box>
                     </Paper>
@@ -940,6 +1211,111 @@ export default function AlbumsPage() {
               </Grid>
             </Paper>
           )}
+
+          {activeTab === 'lists' && (
+            <Paper sx={{ p: 2 }}>
+              <h3>
+                {t('Mis listas')} ({lists.length})
+              </h3>
+              {listsLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={20} />
+                  <span>{t('Cargando...')}</span>
+                </Box>
+              )}
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                <TextField
+                  size="small"
+                  placeholder={t('Nombre de la nueva lista')}
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                />
+                <Button
+                  variant="contained"
+                  sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                  onClick={createList}
+                >
+                  {t('Crear lista')}
+                </Button>
+              </Box>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t('Nombre')}</TableCell>
+                      <TableCell>{t('Creada')}</TableCell>
+                      <TableCell>{t('Álbumes')}</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lists.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell>
+                          {editingListId === l.id ? (
+                            <TextField
+                              size="small"
+                              value={editingListName}
+                              onChange={(e) => setEditingListName(e.target.value)}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                cursor: 'pointer',
+                                color: '#1db954',
+                                textDecoration: 'underline',
+                              }}
+                              onClick={() => navigate(`/list/${l.id}`)}
+                              title={l.name}
+                            >
+                              {l.name}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {Array.isArray(listAlbumCounts?.[l.id])
+                            ? listAlbumCounts[l.id].length
+                            : listAlbumCounts?.[l.id] || 0}
+                        </TableCell>
+                        <TableCell>
+                          {editingListId === l.id ? (
+                            <Button
+                              onClick={saveEditList}
+                              sx={{ mr: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                              variant="contained"
+                            >
+                              {t('Guardar')}
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => startEditList(l)}
+                              sx={{ mr: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                              variant="contained"
+                            >
+                              {t('Editar')}
+                            </Button>
+                          )}
+                          <Button onClick={() => deleteList(l.id)} color="error" variant="outlined">
+                            {t('Eliminar')}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {lists.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center">
+                          {t('No tienes listas aún')}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
         </Grid>
 
         {/* Right: Search and results (or top on narrow) */}
@@ -979,45 +1355,82 @@ export default function AlbumsPage() {
               {q && (
                 <Grid container spacing={2}>
                   {results.map((album) => (
-                    <Grid item key={album.id} xs={12} sm={6}>
+                    <Grid item key={album.id} xs={12} sm={6} md={3}>
                       <Paper sx={{ p: 2 }}>
                         <img
                           src={album.images?.[0]?.url}
                           alt=""
                           style={{
                             width: '100%',
-                            height: 160,
+                            aspectRatio: '1 / 1',
                             objectFit: 'cover',
                             cursor: 'pointer',
                           }}
                           onClick={() => navigate(`/album/${album.id}`)}
                         />
-                        <div>
+                        <div
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
                           <strong
                             style={{
                               cursor: 'pointer',
                               color: '#1db954',
                               textDecoration: 'underline',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: 'inline-block',
+                              maxWidth: '100%',
                             }}
                             onClick={() => navigate(`/album/${album.id}`)}
+                            title={album.name}
                           >
                             {album.name}
                           </strong>
                         </div>
-                        <div>{album.artists.map((a) => a.name).join(', ')}</div>
+                        <div
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={album.artists.map((a) => a.name).join(', ')}
+                        >
+                          {album.artists.map((a) => a.name).join(', ')}
+                        </div>
                         <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>
                           {album.release_date ? new Date(album.release_date).getFullYear() : ''}
                         </div>
-                        <Button
-                          variant="contained"
-                          sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                          onClick={() => saveAlbum(album)}
-                          disabled={myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)}
-                        >
-                          {myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)
-                            ? t('Ya guardado')
-                            : t('Guardar')}
-                        </Button>
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <IconButton
+                            onClick={() =>
+                              window.open(`https://open.spotify.com/album/${album.id}`, '_blank')
+                            }
+                            sx={{
+                              color: '#1db954',
+                              mt: 1,
+                              display: 'inline-flex',
+                              alignSelf: 'flex-start',
+                            }}
+                            aria-label={t('Escuchar en Spotify')}
+                          >
+                            <PlayArrowIcon />
+                          </IconButton>
+                          <Button
+                            variant="contained"
+                            sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                            onClick={() => saveAlbum(album)}
+                            disabled={myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)}
+                          >
+                            {myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)
+                              ? t('Ya en tu colección')
+                              : t('Añadir a mi colección')}
+                          </Button>
+                        </Box>
                       </Paper>
                     </Grid>
                   ))}
@@ -1038,7 +1451,13 @@ export default function AlbumsPage() {
                   <img
                     src={selectedAlbum.images?.[2]?.url || selectedAlbum.images?.[0]?.url}
                     alt={selectedAlbum.name}
-                    style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4 }}
+                    style={{
+                      width: 60,
+                      height: 60,
+                      objectFit: 'cover',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                    }}
                   />
                 </Grid>
                 <Grid item xs>
@@ -1050,21 +1469,21 @@ export default function AlbumsPage() {
               </Grid>
             </Paper>
           )}
-          <List>
-            {friends.map((friend) => (
-              <ListItem key={friend.id} disablePadding>
-                <ListItemButton
-                  onClick={() => recommendTo(selectedAlbum, friend.friendUid)}
-                  sx={{
-                    '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' },
-                    borderRadius: 1,
-                  }}
-                >
-                  <ListItemText primary={friend.friendName} secondary={friend.friendUid} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          <Button
+            variant="contained"
+            sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+            onClick={() =>
+              saveAlbum({
+                id: selectedAlbum.id,
+                name: selectedAlbum.name,
+                artists: selectedAlbum.artists,
+                images: selectedAlbum.images,
+                release_date: selectedAlbum.release_date,
+              })
+            }
+          >
+            {t('Añadir a mi colección')}
+          </Button>
         </DialogContent>
         <DialogActions>
           <Button

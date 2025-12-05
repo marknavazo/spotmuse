@@ -14,6 +14,7 @@ import {
   Grid,
   Typography,
   ButtonGroup,
+  Box,
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
@@ -114,6 +115,8 @@ export default function FriendsPage() {
 
   return (
     <Container maxWidth={false} sx={{ px: 3 }}>
+      {/* Spacer for fixed header */}
+      <Box sx={{ height: (theme) => theme.mixins.toolbar }} />
       <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
         <Grid item xs={9}>
           <TextField
@@ -216,7 +219,7 @@ export default function FriendsPage() {
                   <TableRow
                     key={f.id}
                     sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' } }}
-                    onClick={() => navigate(`/user/${f.userId}`)}
+                    onClick={() => navigate(`/user/${f.friendUid}`)}
                   >
                     <TableCell>{f.friendName}</TableCell>
                     <TableCell>{f.friendUid}</TableCell>

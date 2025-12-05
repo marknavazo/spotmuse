@@ -124,12 +124,36 @@ export default function ProfilePage() {
       { id: artist.id, name: artist.name, images: artist.images },
     ];
     setForm((prev) => ({ ...prev, favoriteArtists: newFavs }));
+    // Persist immediately
+    if (user) {
+      setDoc(
+        doc(db, 'users', user.uid),
+        {
+          favoriteArtists: newFavs,
+          uid: user.uid,
+          preferredLanguage: form.preferredLanguage || '',
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
     toast.success(t('Artista añadido a favoritos'));
   }
 
   function removeFavoriteArtist(id) {
     const newFavs = (form.favoriteArtists || []).filter((a) => a.id !== id);
     setForm((prev) => ({ ...prev, favoriteArtists: newFavs }));
+    // Persist immediately
+    if (user) {
+      setDoc(
+        doc(db, 'users', user.uid),
+        {
+          favoriteArtists: newFavs,
+          uid: user.uid,
+          preferredLanguage: form.preferredLanguage || '',
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
   }
 
   if (!user) return <Typography>{t('Accede para editar tu perfil')}</Typography>;
@@ -144,8 +168,8 @@ export default function ProfilePage() {
           md={isNarrow ? 12 : 6}
           sx={{ p: 3, borderRight: isNarrow ? 'none' : '1px solid #333', order: isNarrow ? 1 : 0 }}
         >
-          <Typography variant="h5" sx={{ mb: 3 }}>
-            {t('Mi perfil')}
+          <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
+            {t('Mi Perfil')}
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
@@ -209,13 +233,20 @@ export default function ProfilePage() {
               </Select>
             </FormControl>
           </Box>
+          <Button
+            variant="contained"
+            onClick={save}
+            sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+          >
+            {t('Guardar')}
+          </Button>
         </Grid>
 
         {/* Right: favorite artists search and list */}
         <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, order: isNarrow ? 2 : 0 }}>
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              {t('Grupos favoritos')}
+            <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
+              {t('Grupos Favoritos')}
             </Typography>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={9}>
@@ -255,8 +286,11 @@ export default function ProfilePage() {
                       variant="outlined"
                       onClick={() => addFavoriteArtist(ar)}
                       sx={{ borderColor: '#1db954', color: '#1db954' }}
+                      disabled={(form.favoriteArtists || []).some((a) => a.id === ar.id)}
                     >
-                      {t('Añadir')}
+                      {(form.favoriteArtists || []).some((a) => a.id === ar.id)
+                        ? t('Ya en tus favoritos')
+                        : t('Añadir')}
                     </Button>
                   }
                 >
@@ -274,36 +308,38 @@ export default function ProfilePage() {
               ))}
             </List>
 
-            <Typography variant="subtitle1" sx={{ mt: 3 }}>
-              {t('Tus favoritos')}
+            <Typography variant="h6" sx={{ mt: 3, fontWeight: 700 }}>
+              {t('Tus grupos favoritos')} ({(form.favoriteArtists || []).length})
             </Typography>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              {(form.favoriteArtists || []).map((f) => (
-                <Grid item key={f.id} xs={12} sm={6}>
-                  <Paper
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <img
-                        src={f.images?.[2]?.url || f.images?.[0]?.url}
-                        alt={f.name}
-                        style={{ width: 48, height: 48, borderRadius: 4, objectFit: 'cover' }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{f.name}</div>
-                      </div>
-                    </Box>
-                    <IconButton onClick={() => removeFavoriteArtist(f.id)} color="error">
-                      <DeleteIcon />
-                    </IconButton>
-                  </Paper>
-                </Grid>
-              ))}
+              {[...(form.favoriteArtists || [])]
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .map((f) => (
+                  <Grid item key={f.id} xs={12} sm={6}>
+                    <Paper
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <img
+                          src={f.images?.[2]?.url || f.images?.[0]?.url}
+                          alt={f.name}
+                          style={{ width: 48, height: 48, borderRadius: 4, objectFit: 'cover' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{f.name}</div>
+                        </div>
+                      </Box>
+                      <IconButton onClick={() => removeFavoriteArtist(f.id)} color="error">
+                        <DeleteIcon />
+                      </IconButton>
+                    </Paper>
+                  </Grid>
+                ))}
               {(form.favoriteArtists || []).length === 0 && (
                 <Grid item xs={12}>
                   <Typography color="text.secondary">
@@ -316,17 +352,7 @@ export default function ProfilePage() {
         </Grid>
       </Grid>
 
-      <Grid container>
-        <Grid item xs={12} sx={{ p: 3 }}>
-          <Button
-            variant="contained"
-            onClick={save}
-            sx={{ mt: 0, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-          >
-            {t('Guardar')}
-          </Button>
-        </Grid>
-      </Grid>
+      {/* Save button moved above; bottom area removed */}
     </Container>
   );
 }

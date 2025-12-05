@@ -21,6 +21,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import ProfilePage from './components/profile/ProfilePage';
 import AlbumsPage from './components/albums/AlbumsPage';
 import AlbumDetail from './components/albums/AlbumDetail';
+import ListDetail from './components/lists/ListDetail';
 import FriendsPage from './components/friends/FriendsPage';
 import UserProfilePage from './components/profile/UserProfilePage';
 import CopilotAgents from './components/copilot/CopilotAgents';
@@ -90,12 +91,12 @@ function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <Toaster position="top-right" />
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <Typography
             variant="h6"
             component={Link}
-            to="/"
+            to="/albums"
             sx={{ color: 'inherit', textDecoration: 'none', flexGrow: 1 }}
           >
             {t('SpotMuse')}
@@ -126,7 +127,9 @@ function App() {
           )}
         </Toolbar>
       </AppBar>
-      <Container maxWidth={false} sx={{ mt: 3, px: 0 }}>
+      {/* Spacer to offset fixed AppBar height */}
+      <Toolbar />
+      <Container maxWidth={false} sx={{ mt: 0, px: 0 }}>
         <Routes>
           <Route
             path="/"
@@ -156,6 +159,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AlbumDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/list/:listId"
+            element={
+              <ProtectedRoute>
+                <ListDetail />
               </ProtectedRoute>
             }
           />

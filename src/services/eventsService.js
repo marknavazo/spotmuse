@@ -22,5 +22,9 @@ export async function getArtistEvents(artistName) {
   if (!res.ok) return [];
   const data = await res.json();
   const events = data?._embedded?.events || [];
-  return events.map(mapEvent);
+  const filtered = events.filter((e) => {
+    const code = e?.dates?.status?.code?.toLowerCase?.();
+    return code !== 'cancelled' && code !== 'canceled';
+  });
+  return filtered.map(mapEvent);
 }
