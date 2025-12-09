@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Box,
   Button,
+  Skeleton,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { db } from '../../firebase/firestore';
 import { getAlbumById } from '../../services/spotifyService';
+import AlbumCover from '../common/AlbumCover';
 import auth from '../../firebase/auth';
 
 export default function Top100Page() {
@@ -131,6 +133,7 @@ export default function Top100Page() {
         <Grid container spacing={2}>
           {top100.map(({ albumId, avg, count }, idx) => {
             const meta = albumsMeta[albumId] || {};
+            const hasMeta = !!(meta.name || (Array.isArray(meta.images) && meta.images.length));
             const cover = meta.images?.[1]?.url || meta.images?.[0]?.url;
             return (
               <Grid
@@ -149,42 +152,42 @@ export default function Top100Page() {
                     <Typography variant="subtitle2">#{idx + 1}</Typography>
                     <Typography variant="subtitle2">{avg.toFixed(1)} ⭐</Typography>
                   </div>
-                  {cover && (
-                    <img
-                      src={cover}
-                      alt={meta.name || albumId}
-                      style={{
-                        width: '100%',
-                        aspectRatio: '1',
-                        objectFit: 'cover',
-                        borderRadius: 6,
+                  <AlbumCover
+                    images={meta.images}
+                    alt={meta.name || ''}
+                    className="album-card-cover"
+                    onClick={() => navigate(`/album/${albumId}`)}
+                  />
+                  {hasMeta ? (
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        mt: 1,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                         cursor: 'pointer',
                       }}
                       onClick={() => navigate(`/album/${albumId}`)}
-                    />
+                      title={meta.name || ''}
+                    >
+                      {meta.name || ''}
+                    </Typography>
+                  ) : (
+                    <Skeleton variant="text" width="80%" sx={{ mt: 1 }} />
                   )}
-                  <Typography
-                    variant="subtitle1"
-                    sx={{
-                      mt: 1,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => navigate(`/album/${albumId}`)}
-                    title={meta.name || albumId}
-                  >
-                    {meta.name || albumId}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                    title={meta.artists}
-                  >
-                    {meta.artists}
-                  </Typography>
+                  {meta.artists ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={meta.artists}
+                    >
+                      {meta.artists}
+                    </Typography>
+                  ) : (
+                    <Skeleton variant="text" width="60%" sx={{ mt: 0.5 }} />
+                  )}
                   <Typography variant="caption" color="text.secondary">
                     {t('Votos')}: {count}
                   </Typography>

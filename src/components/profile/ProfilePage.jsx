@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+import AlbumCover from '../common/AlbumCover';
 import { searchArtists } from '../../services/spotifyService';
 import { storage } from '../../firebase/storage';
 import { db } from '../../firebase/firestore';
@@ -334,11 +335,7 @@ export default function ProfilePage() {
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <img
-                          src={f.images?.[2]?.url || f.images?.[0]?.url}
-                          alt={f.name}
-                          style={{ width: 48, height: 48, borderRadius: 4, objectFit: 'cover' }}
-                        />
+                        <AlbumCover images={f.images} alt={f.name} size={48} />
                         <div>
                           <div style={{ fontWeight: 600 }}>{f.name}</div>
                         </div>

@@ -13,7 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
-import { db, incrementAlbumPlay } from '../../firebase/firestore';
+import { db } from '../../firebase/firestore';
+import { incrementAlbumPlay } from '../../services/firebaseService';
 import auth from '../../firebase/auth';
 import { getAlbumById } from '../../services/spotifyService';
 

@@ -32,20 +32,38 @@ import toast from 'react-hot-toast';
 import {
   collection,
   addDoc,
-  onSnapshot,
   query,
   where,
   doc,
-  getDoc,
-  setDoc,
   serverTimestamp,
   getDocs,
   deleteDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 
-import { db, incrementAlbumPlay, getAlbumPlayInfo } from '../../firebase/firestore';
+import { db } from '../../firebase/firestore';
+import {
+  incrementAlbumPlay,
+  getAlbumPlayInfo,
+  saveMyRating as saveMyRatingService,
+  getMyRating as getMyRatingService,
+  addComment as addCommentService,
+  editComment as editCommentService,
+  deleteComment as deleteCommentService,
+  toggleFavoriteTrack as toggleFavoriteTrackService,
+  subscribeAverageRatingForAlbum,
+  subscribeFriends,
+  subscribeLists,
+  subscribeListsForAlbum,
+  subscribeAlbumOwnersCount,
+  subscribeCommentsForAlbum,
+  getRecommendedByName,
+} from '../../services/firebaseService';
 import { getAlbumById } from '../../services/spotifyService';
 import auth from '../../firebase/auth';
+import '../../styles/albumDetail.scss';
+import AlbumCover from '../common/AlbumCover';
+import { formatDate, formatYear } from '../../utils/format';
 
 export default function AlbumDetail() {
   const { t } = useTranslation();
@@ -100,13 +118,8 @@ export default function AlbumDetail() {
   async function loadMyRating(id) {
     const u = auth.currentUser;
     if (!u || !id) return;
-    const ratingId = `${u.uid}_${id}`;
-    const ref = doc(collection(db, 'ratings'), ratingId);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const d = snap.data();
-      setRating(d.value || 0);
-    }
+    const val = await getMyRatingService(u.uid, id);
+    setRating(val || 0);
   }
 
   async function saveMyRating(val) {
@@ -114,13 +127,7 @@ export default function AlbumDetail() {
     if (!u || !album) return;
     setSavingRating(true);
     try {
-      const ratingId = `${u.uid}_${album.id}`;
-      const ref = doc(collection(db, 'ratings'), ratingId);
-      await setDoc(
-        ref,
-        { uid: u.uid, albumId: album.id, value: val, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      await saveMyRatingService(u.uid, album.id, val);
       setRating(val);
       toast.success(t('Puntuación guardada'));
     } catch (_e) {
@@ -133,72 +140,38 @@ export default function AlbumDetail() {
   // Subscribe to average rating for this album
   useEffect(() => {
     if (!album?.id) return;
-    const ratingsRef = collection(db, 'ratings');
-    const qRatings = query(ratingsRef, where('albumId', '==', album.id));
-    const unsub = onSnapshot(qRatings, (snap) => {
-      let total = 0;
-      let count = 0;
-      snap.docs.forEach((d) => {
-        const data = d.data();
-        if (typeof data.value === 'number') {
-          total += data.value;
-          count += 1;
-        }
-      });
-      setAvgRating(count > 0 ? total / count : null);
-    });
+    const unsub = subscribeAverageRatingForAlbum(album.id, (avg) => setAvgRating(avg));
     return () => unsub();
   }, [album?.id]);
 
   // Load friends list to recommend to
   useEffect(() => {
     if (!user) return;
-    const friendsRef = collection(db, 'friends');
-    const q = query(friendsRef, where('userId', '==', user.uid));
-    const unsub = onSnapshot(q, (snap) => {
-      setFriends(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = subscribeFriends(user.uid, (items) => setFriends(items));
     return () => unsub();
   }, [user]);
 
   // Subscribe to my lists for add-to-list dropdown
   useEffect(() => {
     if (!user) return;
-    const listsRef = collection(db, 'lists');
-    const ql = query(listsRef, where('owner', '==', user.uid));
-    const unsub = onSnapshot(ql, (snap) => {
-      setLists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = subscribeLists(user.uid, (items) => setLists(items));
     return () => unsub();
   }, [user]);
 
   // Subscribe to list memberships for this album (preselect in multiselect)
   useEffect(() => {
     if (!user || !album?.id) return;
-    const laRef = collection(db, 'listAlbums');
-    const qla = query(laRef, where('owner', '==', user.uid), where('albumId', '==', album.id));
-    const unsub = onSnapshot(qla, (snap) => {
-      const ids = snap.docs.map((d) => d.data().listId).filter(Boolean);
-      setAlbumListIds(ids);
-    });
+    const unsub = subscribeListsForAlbum(user.uid, album.id, (ids) => setAlbumListIds(ids));
     return () => unsub();
   }, [user, album?.id]);
 
   // Subscribe to how many users have added this album
   useEffect(() => {
     if (!album?.id) return;
-    const albumsRef = collection(db, 'albums');
-    const qAlbums = query(albumsRef, where('albumId', '==', album.id));
-    const unsub = onSnapshot(qAlbums, (snap) => {
-      setOwnersCount(snap.docs.length);
-      // Check if current user already saved it
-      const u = auth.currentUser;
-      if (u) {
-        const mine = snap.docs.some((d) => d.data().owner === u.uid);
-        setIsSaved(mine);
-      } else {
-        setIsSaved(false);
-      }
+    const u = auth.currentUser;
+    const unsub = subscribeAlbumOwnersCount(album.id, u?.uid, ({ count, mine }) => {
+      setOwnersCount(count);
+      setIsSaved(!!mine);
     });
     return () => unsub();
   }, [album?.id]);
@@ -207,24 +180,9 @@ export default function AlbumDetail() {
   useEffect(() => {
     if (!album?.id || !user) return;
     setCommentsLoading(true);
-    const cRef = collection(db, 'comments');
-    const qC = query(cRef, where('albumId', '==', album.id));
-    const unsub = onSnapshot(qC, (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // Allowed UIDs: me + my friends I follow
-      const allowed = new Set([user.uid, ...friends.map((f) => f.friendUid)]);
-      const filtered = items
-        .filter((c) => allowed.has(c.uid))
-        .sort((a, b) => {
-          const ta = a.createdAt?.toDate
-            ? a.createdAt.toDate().getTime()
-            : Date.parse(a.createdAt || 0) || 0;
-          const tb = b.createdAt?.toDate
-            ? b.createdAt.toDate().getTime()
-            : Date.parse(b.createdAt || 0) || 0;
-          return tb - ta;
-        });
-      setComments(filtered);
+    const allowed = [user.uid, ...friends.map((f) => f.friendUid)];
+    const unsub = subscribeCommentsForAlbum(album.id, allowed, (items) => {
+      setComments(items);
       setCommentsLoading(false);
     });
     return () => unsub();
@@ -235,29 +193,8 @@ export default function AlbumDetail() {
     async function loadRec() {
       const u = auth.currentUser;
       if (!u || !album?.id) return;
-      try {
-        const snap = await getDocs(
-          query(
-            collection(db, 'recommendations'),
-            where('to', '==', u.uid),
-            where('albumId', '==', album.id),
-            where('accepted', '==', true)
-          )
-        );
-        const first = snap.docs[0]?.data();
-        if (first?.from) {
-          const frSnap = await getDocs(
-            query(collection(db, 'friends'), where('userId', '==', u.uid))
-          );
-          const list = frSnap.docs.map((d) => d.data());
-          const m = list.find((f) => f.friendUid === first.from);
-          setRecommendedByName(m?.friendName || first.from);
-        } else {
-          setRecommendedByName('');
-        }
-      } catch (error_) {
-        setRecommendedByName('');
-      }
+      const name = await getRecommendedByName(u.uid, album.id);
+      setRecommendedByName(name);
     }
     loadRec();
   }, [album?.id]);
@@ -276,27 +213,8 @@ export default function AlbumDetail() {
 
   async function toggleFavoriteTrack(track) {
     if (!user || !album || !track?.id) return;
-    const isFav = favoriteTrackIds.includes(track.id);
     try {
-      if (isFav) {
-        // remove favorite doc(s)
-        const qDel = query(
-          collection(db, 'trackFavorites'),
-          where('uid', '==', user.uid),
-          where('albumId', '==', album.id),
-          where('trackId', '==', track.id)
-        );
-        const delSnap = await getDocs(qDel);
-        await Promise.all(delSnap.docs.map((d) => deleteDoc(doc(db, 'trackFavorites', d.id))));
-      } else {
-        await addDoc(collection(db, 'trackFavorites'), {
-          uid: user.uid,
-          albumId: album.id,
-          trackId: track.id,
-          trackName: track.name,
-          createdAt: serverTimestamp(),
-        });
-      }
+      await toggleFavoriteTrackService(user.uid, album.id, track);
     } catch (_e) {
       toast.error(t('Error al actualizar favorito'));
     }
@@ -307,13 +225,7 @@ export default function AlbumDetail() {
     const text = newComment.trim();
     if (!text) return;
     try {
-      await addDoc(collection(db, 'comments'), {
-        albumId: album.id,
-        uid: user.uid,
-        text,
-        createdAt: serverTimestamp(),
-        edited: false,
-      });
+      await addCommentService(user.uid, album.id, text);
       setNewComment('');
       toast.success(t('Comentario añadido'));
     } catch (_e) {
@@ -323,7 +235,7 @@ export default function AlbumDetail() {
 
   async function deleteComment(id) {
     try {
-      await deleteDoc(doc(db, 'comments', id));
+      await deleteCommentService(id);
       toast.success(t('Comentario eliminado'));
     } catch (_e) {
       toast.error(t('Error al eliminar comentario'));
@@ -340,11 +252,7 @@ export default function AlbumDetail() {
     const text = editingText.trim();
     if (!text) return;
     try {
-      await setDoc(
-        doc(db, 'comments', editingId),
-        { text, edited: true, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      await editCommentService(editingId, text);
       setEditingId(null);
       setEditingText('');
       toast.success(t('Comentario editado'));
@@ -501,16 +409,19 @@ export default function AlbumDetail() {
     );
   }
 
-  const cover = album.images?.[0]?.url;
   const artists = album.artists?.map((a) => a.name).join(', ');
-  const year = album.release_date ? new Date(album.release_date).getFullYear() : '-';
 
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
       <Paper sx={{ p: 3 }}>
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={5}>
-            <img src={cover} alt={album.name} style={{ width: '100%', borderRadius: 8 }} />
+            <AlbumCover
+              images={album.images}
+              alt={album.name}
+              className="album-detail-cover"
+              size={250}
+            />
           </Grid>
           <Grid item xs={12} md={7}>
             <Typography variant="h4" gutterBottom>
@@ -520,7 +431,7 @@ export default function AlbumDetail() {
               {artists}
             </Typography>
             <Typography variant="body2" sx={{ color: '#aaa' }}>
-              {t('Año')}: {year}
+              {t('Año')}: {formatYear(album.release_date)}
             </Typography>
             {recommendedByName && (
               <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
@@ -535,10 +446,7 @@ export default function AlbumDetail() {
             </Typography>
             {myLastPlayedAt && (
               <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
-                {t('Última reproducción')}:{' '}
-                {myLastPlayedAt?.toDate
-                  ? new Date(myLastPlayedAt.toDate()).toLocaleString()
-                  : new Date(myLastPlayedAt).toLocaleString()}
+                {t('Última reproducción')}: {formatDate(myLastPlayedAt)}
               </Typography>
             )}
             <Box sx={{ mt: 2 }}>

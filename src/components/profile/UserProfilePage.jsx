@@ -16,6 +16,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
 
+import AlbumCover from '../common/AlbumCover';
 import { db } from '../../firebase/firestore';
 import auth from '../../firebase/auth';
 
@@ -161,11 +162,7 @@ export default function UserProfilePage() {
             {userProfile.favoriteArtists.map((f) => (
               <Grid item key={f.id} xs={12} sm={6} md={4}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <img
-                    src={f.images?.[2]?.url || f.images?.[0]?.url}
-                    alt={f.name}
-                    style={{ width: 56, height: 56, borderRadius: 4, objectFit: 'cover' }}
-                  />
+                  <AlbumCover images={f.images} alt={f.name} size={56} />
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                       {f.name}
@@ -196,17 +193,11 @@ export default function UserProfilePage() {
         {userAlbums.map((album) => (
           <Grid item key={album.id} xs={12} sm={6} md={2}>
             <Paper sx={{ p: 2 }}>
-              <img
-                src={album.images?.[0]?.url || album.images?.[2]?.url}
+              <AlbumCover
+                images={album.images}
                 alt={album.name}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1 / 1',
-                  objectFit: 'cover',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                }}
                 onClick={() => navigate(`/album/${album.albumId}`)}
+                className="album-card-cover"
               />
               <Typography
                 variant="subtitle1"

@@ -35,7 +35,6 @@ import {
   addDoc,
   setDoc,
   doc,
-  onSnapshot,
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -46,7 +45,23 @@ import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
-import { db, incrementAlbumPlay } from '../../firebase/firestore';
+import { db } from '../../firebase/firestore';
+import AlbumCover from '../common/AlbumCover';
+import {
+  incrementAlbumPlay,
+  saveAlbum as saveAlbumService,
+  recommendTo as recommendToService,
+  acceptRecommendation as acceptRecommendationService,
+  deleteRecommendation as deleteRecommendationService,
+  subscribeMyAlbums,
+  subscribeRecommendedToMe,
+  subscribeAcceptedRecommendations,
+  subscribeFriends,
+  subscribeLists,
+  subscribeListAlbumCounts,
+  subscribeAllRatings,
+} from '../../services/firebaseService';
+import '../../styles/albums.scss';
 import auth from '../../firebase/auth';
 import { getArtistEvents } from '../../services/eventsService';
 import { searchAlbums, getArtistAlbums } from '../../services/spotifyService';
@@ -94,52 +109,28 @@ export default function AlbumsPage() {
 
   useEffect(() => {
     if (!user) return;
-    // subscribe to my albums
-    const myRef = collection(db, 'albums');
-    const q1 = query(myRef, where('owner', '==', user.uid));
-    const unsubMy = onSnapshot(q1, (snap) => {
-      setMyAlbums(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubMy = subscribeMyAlbums(user.uid, (items) => {
+      setMyAlbums(items);
       setMyLoading(false);
     });
-    // subscribe to recommendations directed to me and pending
-    const recRef = collection(db, 'recommendations');
-    const q2 = query(recRef, where('to', '==', user.uid), where('accepted', '==', false));
-    const unsubRec = onSnapshot(q2, (snap) => {
-      setRecommended(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubRec = subscribeRecommendedToMe(user.uid, (items) => {
+      setRecommended(items);
       setRecLoading(false);
     });
-    // accepted recommendations (history)
-    const q2b = query(recRef, where('to', '==', user.uid), where('accepted', '==', true));
-    const unsubRecAccepted = onSnapshot(q2b, (snap) => {
-      setAcceptedRecs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubRecAccepted = subscribeAcceptedRecommendations(user.uid, (items) => {
+      setAcceptedRecs(items);
     });
-    // load friends list
-    const friendsRef = collection(db, 'friends');
-    const q3 = query(friendsRef, where('userId', '==', user.uid));
-    const unsubFriends = onSnapshot(q3, (snap) => {
-      setFriends(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubFriends = subscribeFriends(user.uid, (items) => {
+      setFriends(items);
       setFriendsLoading(false);
     });
-    // subscribe to my lists
-    const listsRef = collection(db, 'lists');
-    const ql = query(listsRef, where('owner', '==', user.uid));
-    const unsubLists = onSnapshot(ql, (snap) => {
-      setLists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubLists = subscribeLists(user.uid, (items) => {
+      setLists(items);
       setListsLoading(false);
     });
-    // subscribe to listAlbums for counts per list
-    const listAlbumsRef = collection(db, 'listAlbums');
-    const qla = query(listAlbumsRef, where('owner', '==', user.uid));
-    const unsubListAlbums = onSnapshot(qla, (snap) => {
-      const counts = {};
-      snap.docs.forEach((d) => {
-        const data = d.data();
-        const lid = data.listId;
-        if (!lid) return;
-        counts[lid] = (counts[lid] || 0) + 1;
-      });
-      setListAlbumCounts(counts);
-    });
+    const unsubListAlbums = subscribeListAlbumCounts(user.uid, (counts) =>
+      setListAlbumCounts(counts)
+    );
     return () => {
       unsubMy();
       unsubRec();
@@ -153,19 +144,13 @@ export default function AlbumsPage() {
   // Subscribe to ratings to show my score and global average
   useEffect(() => {
     if (!user) return;
-    const ratingsRef = collection(db, 'ratings');
-    const unsub = onSnapshot(ratingsRef, (snap) => {
+    const unsub = subscribeAllRatings((items) => {
       const myMap = {};
       const totals = {};
       const counts = {};
-      snap.docs.forEach((d) => {
-        const data = d.data();
+      items.forEach((data) => {
         if (!data.albumId || typeof data.value !== 'number') return;
-        // My ratings
-        if (data.uid === user.uid) {
-          myMap[data.albumId] = data.value;
-        }
-        // Global totals
+        if (data.uid === user.uid) myMap[data.albumId] = data.value;
         totals[data.albumId] = (totals[data.albumId] || 0) + data.value;
         counts[data.albumId] = (counts[data.albumId] || 0) + 1;
       });
@@ -305,38 +290,9 @@ export default function AlbumsPage() {
   async function saveAlbum(album) {
     if (!user) return;
     try {
-      // Normalize album shape to match My Albums subscription (owner/albumId/name/artists/images/releaseDate)
-      const albumId = album.albumId || album.id;
-      const name = album.name;
-      const artists = Array.isArray(album.artists)
-        ? album.artists.map((a) => a.name ?? a).join(', ')
-        : album.artists || '';
-      const images = album.images || [];
-      const releaseDate = album.releaseDate || album.release_date || null;
-
-      // Duplicate check aligned with 'owner' and 'albumId'
-      const qDup = query(
-        collection(db, 'albums'),
-        where('owner', '==', user.uid),
-        where('albumId', '==', albumId)
-      );
-      const existing = await getDocs(qDup);
-      if (!existing.empty) {
-        toast(t('Este álbum ya está en tu colección'));
-        return;
-      }
-      await addDoc(collection(db, 'albums'), {
-        owner: user.uid,
-        albumId,
-        name,
-        artists,
-        images,
-        releaseDate,
-        addedAt: serverTimestamp(),
-      });
+      await saveAlbumService(user.uid, album);
       toast.success(t('Álbum guardado'));
-      // Refresh owners for this album
-      await refreshOwnersForAlbum(albumId);
+      await refreshOwnersForAlbum(album.albumId || album.id);
     } catch (_error) {
       toast.error(t('Error al guardar álbum'));
     }
@@ -529,17 +485,7 @@ export default function AlbumsPage() {
   async function _recommendTo(album, toUid) {
     if (!user) return toast.error('Accede para recomendar');
     try {
-      await addDoc(collection(db, 'recommendations'), {
-        from: user.uid,
-        to: toUid,
-        albumId: album.albumId || album.id,
-        albumName: album.name,
-        artist: album.artists,
-        images: album.images,
-        releaseDate: album.releaseDate,
-        accepted: false,
-        createdAt: new Date().toISOString(),
-      });
+      await recommendToService(user.uid, album, toUid);
       toast.success('Recomendación enviada');
       setOpenDialog(false);
     } catch (_error) {
@@ -556,20 +502,8 @@ export default function AlbumsPage() {
   }
 
   async function acceptRecommendation(rec) {
-    // mark accepted and add to my albums
     try {
-      await setDoc(doc(db, 'recommendations', rec.id), { ...rec, accepted: true });
-      await addDoc(collection(db, 'albums'), {
-        owner: user.uid,
-        albumId: rec.albumId,
-        name: rec.albumName,
-        artists: rec.artist,
-        images: rec.images || [],
-        releaseDate: rec.releaseDate,
-        addedAt: new Date().toISOString(),
-        viaRecommendation: true,
-        recommendedBy: rec.from,
-      });
+      await acceptRecommendationService(user.uid, rec);
       toast.success('Álbum aceptado y agregado a tu colección');
     } catch (_error) {
       toast.error('Error al aceptar recomendación');
@@ -583,7 +517,7 @@ export default function AlbumsPage() {
 
   async function deleteRecommendation(recId) {
     try {
-      await deleteDoc(doc(db, 'recommendations', recId));
+      await deleteRecommendationService(recId);
       toast.success(t('Recomendación eliminada'));
     } catch (_error) {
       toast.error(t('Error al eliminar recomendación'));
@@ -724,17 +658,10 @@ export default function AlbumsPage() {
                   <TableBody>
                     {filteredMyAlbums.map((a) => (
                       <TableRow key={a.id}>
-                        <TableCell>
-                          <img
-                            src={a.images?.[2]?.url || a.images?.[0]?.url}
+                        <TableCell sx={{ p: 0 }}>
+                          <AlbumCover
+                            images={a.images || a.album?.images}
                             alt={a.name}
-                            style={{
-                              width: 50,
-                              height: 50,
-                              objectFit: 'cover',
-                              borderRadius: 4,
-                              cursor: 'pointer',
-                            }}
                             onClick={() => navigate(`/album/${a.albumId}`)}
                           />
                         </TableCell>
@@ -878,17 +805,10 @@ export default function AlbumsPage() {
                     <TableBody>
                       {sortedRecommended.map((r) => (
                         <TableRow key={r.id}>
-                          <TableCell>
-                            <img
-                              src={r.images?.[2]?.url || r.images?.[0]?.url}
+                          <TableCell sx={{ p: 0 }}>
+                            <AlbumCover
+                              images={r.images}
                               alt={r.albumName}
-                              style={{
-                                width: 50,
-                                height: 50,
-                                objectFit: 'cover',
-                                borderRadius: 4,
-                                cursor: 'pointer',
-                              }}
                               onClick={() => navigate(`/album/${r.albumId}`)}
                             />
                           </TableCell>
@@ -996,17 +916,10 @@ export default function AlbumsPage() {
                     <TableBody>
                       {sortedAcceptedRecs.map((r) => (
                         <TableRow key={r.id}>
-                          <TableCell>
-                            <img
-                              src={r.images?.[2]?.url || r.images?.[0]?.url}
+                          <TableCell sx={{ p: 0 }}>
+                            <AlbumCover
+                              images={r.images}
                               alt={r.albumName}
-                              style={{
-                                width: 50,
-                                height: 50,
-                                objectFit: 'cover',
-                                borderRadius: 4,
-                                cursor: 'pointer',
-                              }}
                               onClick={() => navigate(`/album/${r.albumId}`)}
                             />
                           </TableCell>
@@ -1080,15 +993,10 @@ export default function AlbumsPage() {
                 {news.map((album) => (
                   <Grid item key={album.id} xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2 }}>
-                      <img
-                        src={album.images?.[0]?.url}
-                        alt=""
-                        style={{
-                          width: '100%',
-                          aspectRatio: '1 / 1',
-                          objectFit: 'cover',
-                          cursor: 'pointer',
-                        }}
+                      <AlbumCover
+                        images={album.images}
+                        alt={album.name}
+                        className="album-card-cover"
                         onClick={() => navigate(`/album/${album.id}`)}
                       />
                       <div
@@ -1099,16 +1007,7 @@ export default function AlbumsPage() {
                         }}
                       >
                         <strong
-                          style={{
-                            cursor: 'pointer',
-                            color: '#1db954',
-                            textDecoration: 'underline',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: 'inline-block',
-                            maxWidth: '100%',
-                          }}
+                          className="link-underline"
                           onClick={() => navigate(`/album/${album.id}`)}
                           title={album.name}
                         >
@@ -1394,16 +1293,11 @@ export default function AlbumsPage() {
                   {results.map((album) => (
                     <Grid item key={album.id} xs={12} sm={6} md={3}>
                       <Paper sx={{ p: 2 }}>
-                        <img
-                          src={album.images?.[0]?.url}
-                          alt=""
-                          style={{
-                            width: '100%',
-                            aspectRatio: '1 / 1',
-                            objectFit: 'cover',
-                            cursor: 'pointer',
-                          }}
+                        <AlbumCover
+                          images={album.images}
+                          alt={album.name}
                           onClick={() => navigate(`/album/${album.id}`)}
+                          className="album-card-cover"
                         />
                         <div
                           style={{
@@ -1488,17 +1382,7 @@ export default function AlbumsPage() {
             <Paper sx={{ p: 2, mb: 2, bgcolor: '#2a2a2a' }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item>
-                  <img
-                    src={selectedAlbum.images?.[2]?.url || selectedAlbum.images?.[0]?.url}
-                    alt={selectedAlbum.name}
-                    style={{
-                      width: 60,
-                      height: 60,
-                      objectFit: 'cover',
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                    }}
-                  />
+                  <AlbumCover images={selectedAlbum.images} alt={selectedAlbum.name} size={60} />
                 </Grid>
                 <Grid item xs>
                   <div>

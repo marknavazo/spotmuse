@@ -5,6 +5,7 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import { useTranslation } from 'react-i18next';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
+import AlbumCover from '../common/AlbumCover';
 import { db } from '../../firebase/firestore';
 
 export default function ListDetail() {
@@ -68,16 +69,11 @@ export default function ListDetail() {
           {albums.map((a) => (
             <Grid item key={a.id} xs={12} sm={6} md={2}>
               <Paper sx={{ p: 2 }}>
-                <img
-                  src={a.images?.[0]?.url}
+                <AlbumCover
+                  images={a.images}
                   alt={a.name}
-                  style={{
-                    width: '100%',
-                    aspectRatio: '1 / 1',
-                    objectFit: 'cover',
-                    cursor: 'pointer',
-                  }}
                   onClick={() => navigate(`/album/${a.albumId}`)}
+                  className="album-card-cover"
                 />
                 <IconButton
                   onClick={() =>
