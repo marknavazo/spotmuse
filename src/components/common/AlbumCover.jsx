@@ -35,7 +35,9 @@ export default function AlbumCover({ images, alt, size = 50, className, onClick 
   }, [src]);
   const [loaded, setLoaded] = useState(false);
   const showSkeleton = !src || !loaded;
-  const isResponsive = className && className.includes('album-card-cover');
+  const isResponsive =
+    !!className &&
+    (className.includes('album-card-cover') || className.includes('album-detail-cover'));
   return (
     <Box
       sx={{
@@ -71,8 +73,8 @@ export default function AlbumCover({ images, alt, size = 50, className, onClick 
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
           }}
         >
           <Skeleton

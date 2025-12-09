@@ -10,24 +10,12 @@ import {
   MenuItem,
   Checkbox,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
   Box,
   CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import StarIcon from '@mui/icons-material/Star';
-import StarBorderIcon from '@mui/icons-material/StarBorder';
 import toast from 'react-hot-toast';
 import {
   collection,
@@ -38,7 +26,6 @@ import {
   serverTimestamp,
   getDocs,
   deleteDoc,
-  onSnapshot,
 } from 'firebase/firestore';
 
 import { db } from '../../firebase/firestore';
@@ -47,16 +34,11 @@ import {
   getAlbumPlayInfo,
   saveMyRating as saveMyRatingService,
   getMyRating as getMyRatingService,
-  addComment as addCommentService,
-  editComment as editCommentService,
-  deleteComment as deleteCommentService,
-  toggleFavoriteTrack as toggleFavoriteTrackService,
   subscribeAverageRatingForAlbum,
   subscribeFriends,
   subscribeLists,
   subscribeListsForAlbum,
   subscribeAlbumOwnersCount,
-  subscribeCommentsForAlbum,
   getRecommendedByName,
 } from '../../services/firebaseService';
 import { getAlbumById } from '../../services/spotifyService';
@@ -64,6 +46,10 @@ import auth from '../../firebase/auth';
 import '../../styles/albumDetail.scss';
 import AlbumCover from '../common/AlbumCover';
 import { formatDate, formatYear } from '../../utils/format';
+
+import AlbumTracks from './AlbumTracks';
+import CommentsSection from './CommentsSection';
+import RecommendDialog from './RecommendDialog';
 
 export default function AlbumDetail() {
   const { t } = useTranslation();
@@ -80,16 +66,6 @@ export default function AlbumDetail() {
   const [myLastPlayedAt, setMyLastPlayedAt] = useState(null);
   const [lists, setLists] = useState([]);
   const [albumListIds, setAlbumListIds] = useState([]);
-  const [showLyrics, setShowLyrics] = useState(false);
-  const [lyricsTrack, setLyricsTrack] = useState(null);
-  const [lyricsText, setLyricsText] = useState('');
-  const [loadingLyrics, setLoadingLyrics] = useState(false);
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editingText, setEditingText] = useState('');
-  const [favoriteTrackIds, setFavoriteTrackIds] = useState([]);
   const [recommendedByName, setRecommendedByName] = useState('');
   const user = auth.currentUser;
 
@@ -137,35 +113,30 @@ export default function AlbumDetail() {
     }
   }
 
-  // Subscribe to average rating for this album
   useEffect(() => {
     if (!album?.id) return;
     const unsub = subscribeAverageRatingForAlbum(album.id, (avg) => setAvgRating(avg));
     return () => unsub();
   }, [album?.id]);
 
-  // Load friends list to recommend to
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeFriends(user.uid, (items) => setFriends(items));
     return () => unsub();
   }, [user]);
 
-  // Subscribe to my lists for add-to-list dropdown
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeLists(user.uid, (items) => setLists(items));
     return () => unsub();
   }, [user]);
 
-  // Subscribe to list memberships for this album (preselect in multiselect)
   useEffect(() => {
     if (!user || !album?.id) return;
     const unsub = subscribeListsForAlbum(user.uid, album.id, (ids) => setAlbumListIds(ids));
     return () => unsub();
   }, [user, album?.id]);
 
-  // Subscribe to how many users have added this album
   useEffect(() => {
     if (!album?.id) return;
     const u = auth.currentUser;
@@ -176,19 +147,6 @@ export default function AlbumDetail() {
     return () => unsub();
   }, [album?.id]);
 
-  // Subscribe to comments for this album and show mine + people I follow
-  useEffect(() => {
-    if (!album?.id || !user) return;
-    setCommentsLoading(true);
-    const allowed = [user.uid, ...friends.map((f) => f.friendUid)];
-    const unsub = subscribeCommentsForAlbum(album.id, allowed, (items) => {
-      setComments(items);
-      setCommentsLoading(false);
-    });
-    return () => unsub();
-  }, [album?.id, user, friends]);
-
-  // Load who recommended this album to me (if accepted)
   useEffect(() => {
     async function loadRec() {
       const u = auth.currentUser;
@@ -198,68 +156,6 @@ export default function AlbumDetail() {
     }
     loadRec();
   }, [album?.id]);
-
-  // Subscribe to my favorite tracks for this album
-  useEffect(() => {
-    if (!album?.id || !user) return;
-    const favRef = collection(db, 'trackFavorites');
-    const qFav = query(favRef, where('uid', '==', user.uid), where('albumId', '==', album.id));
-    const unsub = onSnapshot(qFav, (snap) => {
-      const ids = snap.docs.map((d) => d.data().trackId).filter(Boolean);
-      setFavoriteTrackIds(ids);
-    });
-    return () => unsub();
-  }, [album?.id, user]);
-
-  async function toggleFavoriteTrack(track) {
-    if (!user || !album || !track?.id) return;
-    try {
-      await toggleFavoriteTrackService(user.uid, album.id, track);
-    } catch (_e) {
-      toast.error(t('Error al actualizar favorito'));
-    }
-  }
-
-  async function addComment() {
-    if (!user || !album) return toast.error(t('Accede para comentar'));
-    const text = newComment.trim();
-    if (!text) return;
-    try {
-      await addCommentService(user.uid, album.id, text);
-      setNewComment('');
-      toast.success(t('Comentario añadido'));
-    } catch (_e) {
-      toast.error(t('Error al añadir comentario'));
-    }
-  }
-
-  async function deleteComment(id) {
-    try {
-      await deleteCommentService(id);
-      toast.success(t('Comentario eliminado'));
-    } catch (_e) {
-      toast.error(t('Error al eliminar comentario'));
-    }
-  }
-
-  function startEditComment(c) {
-    setEditingId(c.id);
-    setEditingText(c.text || '');
-  }
-
-  async function saveEditComment() {
-    if (!editingId) return;
-    const text = editingText.trim();
-    if (!text) return;
-    try {
-      await editCommentService(editingId, text);
-      setEditingId(null);
-      setEditingText('');
-      toast.success(t('Comentario editado'));
-    } catch (_e) {
-      toast.error(t('Error al editar comentario'));
-    }
-  }
 
   async function saveAlbum() {
     if (!user || !album) return toast.error(t('Accede para guardar álbumes'));
@@ -279,67 +175,11 @@ export default function AlbumDetail() {
     }
   }
 
-  async function fetchLyrics(track, artistName) {
-    const title = track?.name || '';
-    const artist = artistName || '';
-    if (!title || !artist) return;
-    setShowLyrics(true);
-    setLyricsTrack(track);
-    setLoadingLyrics(true);
-    setLyricsText('');
-    const Controller =
-      typeof globalThis !== 'undefined' && globalThis.AbortController
-        ? globalThis.AbortController
-        : undefined;
-    const controller = Controller ? new Controller() : { abort: () => {} };
-    const setTO =
-      typeof globalThis !== 'undefined' && globalThis.setTimeout
-        ? globalThis.setTimeout
-        : setTimeout;
-    const clearTO =
-      typeof globalThis !== 'undefined' && globalThis.clearTimeout
-        ? globalThis.clearTimeout
-        : () => {};
-    const timeoutId = setTO(() => controller.abort(), 7000);
-    try {
-      const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`;
-      let res = await fetch(url, { signal: controller.signal });
-      if (res.ok) {
-        const data = await res.json();
-        setLyricsText(data?.lyrics || '');
-      } else {
-        // Try a CORS proxy fallback (AllOrigins)
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        res = await fetch(proxyUrl, { signal: controller.signal });
-        if (res.ok) {
-          // Some proxies return plain text; attempt JSON parse then fallback to text
-          let text = '';
-          try {
-            const data = await res.json();
-            text = data?.lyrics || '';
-          } catch {
-            text = await res.text();
-          }
-          setLyricsText(text || '');
-        } else {
-          setLyricsText('');
-        }
-      }
-    } catch (_e) {
-      // On timeout or network/CORS error, show not available
-      setLyricsText('');
-    } finally {
-      clearTO(timeoutId);
-      setLoadingLyrics(false);
-    }
-  }
-
   async function updateAlbumLists(newListIds) {
     if (!user || !album) return;
     try {
       const current = new Set(albumListIds);
       const next = new Set(newListIds || []);
-      // Add to lists present in next but not in current
       for (const id of next) {
         if (!current.has(id)) {
           await addDoc(collection(db, 'listAlbums'), {
@@ -354,7 +194,6 @@ export default function AlbumDetail() {
           });
         }
       }
-      // Remove from lists present in current but not in next
       for (const id of current) {
         if (!next.has(id)) {
           const qDel = query(
@@ -494,7 +333,6 @@ export default function AlbumDetail() {
                 <PlayArrowIcon />
               </IconButton>
             </div>
-            {/* First line: add to list selector */}
             {lists.length > 0 && (
               <Box sx={{ mt: 2 }}>
                 <TextField
@@ -524,7 +362,6 @@ export default function AlbumDetail() {
                 </TextField>
               </Box>
             )}
-            {/* Second line: save and recommend buttons */}
             <Box sx={{ mt: 2 }}>
               <Button
                 variant="contained"
@@ -547,301 +384,15 @@ export default function AlbumDetail() {
           </Grid>
         </Grid>
       </Paper>
-      {/* Tracks list */}
-      <Paper sx={{ p: 3, mt: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          {showLyrics ? t('Letra') : t('Canciones')}
-        </Typography>
-        {showLyrics ? (
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              {lyricsTrack ? lyricsTrack.name : ''}
-            </Typography>
-            {loadingLyrics ? (
-              <CircularProgress size={20} />
-            ) : lyricsText ? (
-              <Typography whiteSpace="pre-line">{lyricsText}</Typography>
-            ) : (
-              <Typography color="text.secondary">{t('No disponible')}</Typography>
-            )}
-            <Box sx={{ mt: 2 }}>
-              <Button
-                variant="contained"
-                sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                onClick={() => {
-                  setShowLyrics(false);
-                  setLyricsText('');
-                  setLyricsTrack(null);
-                }}
-              >
-                {t('Volver al listado de canciones')}
-              </Button>
-            </Box>
-          </Box>
-        ) : Array.isArray(album.tracks?.items) && album.tracks.items.length > 0 ? (
-          <List dense>
-            {album.tracks.items.map((track, idx) => (
-              <ListItem
-                key={track.id || idx}
-                secondaryAction={
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <IconButton
-                      onClick={() => toggleFavoriteTrack(track)}
-                      sx={{ color: favoriteTrackIds.includes(track.id) ? '#ffd700' : '#aaa' }}
-                      aria-label={t('Marcar como favorito')}
-                    >
-                      {favoriteTrackIds.includes(track.id) ? <StarIcon /> : <StarBorderIcon />}
-                    </IconButton>
-                    <IconButton
-                      onClick={() => {
-                        if (user && album?.id) {
-                          incrementAlbumPlay(user.uid, album.id).catch(() => {});
-                        }
-                        window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
-                      }}
-                      sx={{ color: '#1db954' }}
-                      aria-label={t('Escuchar en Spotify')}
-                    >
-                      <PlayArrowIcon />
-                    </IconButton>
-                    <Button
-                      variant="outlined"
-                      sx={{ borderColor: '#1db954', color: '#1db954' }}
-                      onClick={() => fetchLyrics(track, album.artists?.[0]?.name)}
-                    >
-                      {t('Ver letra')}
-                    </Button>
-                  </Box>
-                }
-              >
-                <ListItemText
-                  primary={`${idx + 1}. ${track.name}`}
-                  secondary={formatDuration(track.duration_ms)}
-                />
-              </ListItem>
-            ))}
-          </List>
-        ) : (
-          <Typography color="text.secondary">{t('No disponible')}</Typography>
-        )}
-      </Paper>
-
-      {/* Comments section */}
-      <Paper sx={{ p: 3, mt: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          {t('Comentarios')}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder={t('Escribe un comentario')}
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-          />
-          <Button
-            variant="contained"
-            sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-            onClick={addComment}
-          >
-            {t('Añadir')}
-          </Button>
-        </Box>
-        {commentsLoading ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={20} />
-            <span>{t('Cargando...')}</span>
-          </Box>
-        ) : comments.length === 0 ? (
-          <Typography color="text.secondary">{t('No hay comentarios')}</Typography>
-        ) : (
-          <List dense>
-            {comments.map((c) => {
-              const author =
-                c.uid === user?.uid
-                  ? t('Tú')
-                  : friends.find((f) => f.friendUid === c.uid)?.friendName || c.uid;
-              const ts = c.createdAt?.toDate
-                ? new Date(c.createdAt.toDate()).toLocaleString()
-                : c.createdAt
-                  ? new Date(c.createdAt).toLocaleString()
-                  : '';
-              const editedFlag = c.edited ? ` (${t('editado')})` : '';
-              const isMine = c.uid === user?.uid;
-              return (
-                <ListItem
-                  key={c.id}
-                  alignItems="flex-start"
-                  sx={{ alignItems: 'flex-start' }}
-                  secondaryAction={
-                    isMine && editingId !== c.id ? (
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        {editingId === c.id ? (
-                          <>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                              onClick={saveEditComment}
-                            >
-                              {t('Guardar')}
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="error"
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditingText('');
-                              }}
-                            >
-                              {t('Cancelar')}
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <IconButton
-                              size="small"
-                              aria-label={t('Editar')}
-                              onClick={() => startEditComment(c)}
-                              sx={{ color: '#1db954' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              aria-label={t('Eliminar')}
-                              onClick={() => deleteComment(c.id)}
-                              sx={{ color: '#ff4d4f' }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </>
-                        )}
-                      </Box>
-                    ) : null
-                  }
-                >
-                  {editingId === c.id ? (
-                    <Box sx={{ width: '100%', pr: 0 }}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        autoFocus
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            saveEditComment();
-                          } else if (e.key === 'Escape') {
-                            setEditingId(null);
-                            setEditingText('');
-                          }
-                        }}
-                      />
-                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                          onClick={saveEditComment}
-                        >
-                          {t('Guardar')}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditingText('');
-                          }}
-                        >
-                          {t('Cancelar')}
-                        </Button>
-                      </Box>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ mt: 0.5, display: 'block' }}
-                      >
-                        {author} • {ts}
-                        {editedFlag}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <ListItemText primary={c.text} secondary={`${author} • ${ts}${editedFlag}`} />
-                  )}
-                </ListItem>
-              );
-            })}
-          </List>
-        )}
-      </Paper>
-
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('Recomendar a un amigo')}</DialogTitle>
-        <DialogContent>
-          {album && (
-            <Paper sx={{ p: 2, mb: 2, bgcolor: '#2a2a2a' }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item>
-                  <img
-                    src={album.images?.[2]?.url || album.images?.[0]?.url}
-                    alt={album.name}
-                    style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4 }}
-                  />
-                </Grid>
-                <Grid item xs>
-                  <div>
-                    <strong>{album.name}</strong>
-                  </div>
-                  <div style={{ color: '#999', fontSize: '0.9em' }}>
-                    {album.artists?.map((a) => a.name).join(', ')}
-                  </div>
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
-          <List>
-            {friends.map((friend) => (
-              <ListItem key={friend.id} disablePadding>
-                <ListItemButton
-                  onClick={() => recommendTo(friend.friendUid)}
-                  sx={{ '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' }, borderRadius: 1 }}
-                >
-                  <ListItemText primary={friend.friendName} secondary={friend.friendUid} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setOpenDialog(false)}
-            variant="outlined"
-            color="error"
-            sx={{
-              borderColor: '#ff4d4f',
-              color: '#ff4d4f',
-              '&:hover': { borderColor: '#ff6b6d', bgcolor: 'rgba(255,77,79,0.08)' },
-            }}
-          >
-            {t('Cancelar')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <AlbumTracks album={album} user={user} />
+      <CommentsSection albumId={album.id} user={user} friends={friends} />
+      <RecommendDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        album={album}
+        friends={friends}
+        onRecommend={(toUid) => recommendTo(toUid)}
+      />
     </Container>
   );
-}
-
-// (removed duplicate fetchLyrics; logic lives inside component above)
-
-function formatDuration(ms) {
-  if (!ms && ms !== 0) return '';
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
