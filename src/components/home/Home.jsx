@@ -17,6 +17,7 @@ export default function Home() {
   const [useFallback, setUseFallback] = useState(false);
   const cursorRef = useRef(null);
   const sentinelRef = useRef(null);
+  const loadedIdsRef = useRef(new Set());
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -68,7 +69,13 @@ export default function Home() {
           };
         })
       );
-      setItems((prev) => [...prev, ...rows]);
+      // Deduplicate by id to avoid repeated comments
+      const unique = rows.filter((r) => {
+        if (loadedIdsRef.current.has(r.id)) return false;
+        loadedIdsRef.current.add(r.id);
+        return true;
+      });
+      setItems((prev) => [...prev, ...unique]);
     } catch (_e) {
       // Switch to fallback if composite index missing for where + orderBy
       setUseFallback(true);
@@ -86,6 +93,7 @@ export default function Home() {
     cursorRef.current = null;
     setItems([]);
     setDone(false);
+    loadedIdsRef.current = new Set();
     if (user) fetchPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
@@ -97,13 +105,13 @@ export default function Home() {
     if (!IO) return;
     const io = new IO((entries) => {
       const entry = entries[0];
-      if (entry.isIntersecting) {
+      if (entry.isIntersecting && !loading && !done) {
         fetchPage();
       }
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchPage]);
+  }, [fetchPage, loading, done]);
 
   return (
     <Container maxWidth="md" sx={{ mt: 2 }}>

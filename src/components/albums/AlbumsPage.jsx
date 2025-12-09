@@ -46,7 +46,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
-import { db } from '../../firebase/firestore';
+import { db, incrementAlbumPlay } from '../../firebase/firestore';
 import auth from '../../firebase/auth';
 import { getArtistEvents } from '../../services/eventsService';
 import { searchAlbums, getArtistAlbums } from '../../services/spotifyService';
@@ -708,7 +708,6 @@ export default function AlbumsPage() {
                       <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
                         {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
-                      <TableCell>{t('Recomendado por')}</TableCell>
                       <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
                         {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </TableCell>
@@ -777,11 +776,6 @@ export default function AlbumsPage() {
                           {a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}
                         </TableCell>
                         <TableCell>
-                          {a.viaRecommendation && a.recommendedBy
-                            ? getRecommenderName(a.recommendedBy)
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
                           {typeof avgRatings[a.albumId] === 'number'
                             ? Number(avgRatings[a.albumId]).toFixed(1)
                             : '-'}
@@ -798,9 +792,12 @@ export default function AlbumsPage() {
                         </TableCell>
                         <TableCell>
                           <IconButton
-                            onClick={() =>
-                              window.open(`https://open.spotify.com/album/${a.albumId}`, '_blank')
-                            }
+                            onClick={() => {
+                              if (user && a.albumId) {
+                                incrementAlbumPlay(user.uid, a.albumId).catch(() => {});
+                              }
+                              window.open(`https://open.spotify.com/album/${a.albumId}`, '_blank');
+                            }}
                             sx={{ color: '#1db954' }}
                           >
                             <PlayArrowIcon />
@@ -924,9 +921,15 @@ export default function AlbumsPage() {
                           <TableCell>{getRecommenderName(r.from)}</TableCell>
                           <TableCell>
                             <IconButton
-                              onClick={() =>
-                                window.open(`https://open.spotify.com/album/${r.albumId}`, '_blank')
-                              }
+                              onClick={() => {
+                                if (user && r.albumId) {
+                                  incrementAlbumPlay(user.uid, r.albumId).catch(() => {});
+                                }
+                                window.open(
+                                  `https://open.spotify.com/album/${r.albumId}`,
+                                  '_blank'
+                                );
+                              }}
                               sx={{ color: '#1db954' }}
                             >
                               <PlayArrowIcon />
@@ -1036,9 +1039,15 @@ export default function AlbumsPage() {
                           <TableCell>{getRecommenderName(r.from)}</TableCell>
                           <TableCell>
                             <IconButton
-                              onClick={() =>
-                                window.open(`https://open.spotify.com/album/${r.albumId}`, '_blank')
-                              }
+                              onClick={() => {
+                                if (user && r.albumId) {
+                                  incrementAlbumPlay(user.uid, r.albumId).catch(() => {});
+                                }
+                                window.open(
+                                  `https://open.spotify.com/album/${r.albumId}`,
+                                  '_blank'
+                                );
+                              }}
                               sx={{ color: '#1db954' }}
                             >
                               <PlayArrowIcon />
@@ -1122,6 +1131,9 @@ export default function AlbumsPage() {
                       <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         <IconButton
                           onClick={() => {
+                            if (user && album.id) {
+                              incrementAlbumPlay(user.uid, album.id).catch(() => {});
+                            }
                             const url =
                               album.external_urls?.spotify ||
                               `https://open.spotify.com/album/${album.id}`;
@@ -1432,9 +1444,12 @@ export default function AlbumsPage() {
                         </div>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                           <IconButton
-                            onClick={() =>
-                              window.open(`https://open.spotify.com/album/${album.id}`, '_blank')
-                            }
+                            onClick={() => {
+                              if (user && album.id) {
+                                incrementAlbumPlay(user.uid, album.id).catch(() => {});
+                              }
+                              window.open(`https://open.spotify.com/album/${album.id}`, '_blank');
+                            }}
                             sx={{
                               color: '#1db954',
                               mt: 1,

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -9,6 +9,10 @@ import {
   ThemeProvider,
   createTheme,
   CssBaseline,
+  Avatar,
+  Box,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import toast, { Toaster } from 'react-hot-toast';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -32,6 +36,7 @@ import Top100Page from './components/albums/Top100Page';
 import GroupsPage from './components/artists/GroupsPage';
 import Home from './components/home/Home';
 import Feed from './components/feed/Feed';
+import SongsPage from './components/songs/SongsPage';
 
 const darkTheme = createTheme({
   palette: {
@@ -48,7 +53,14 @@ const darkTheme = createTheme({
 
 function App() {
   const [user, setUser] = useState(null);
+  const [userInitials, setUserInitials] = useState('');
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [hoverMenuOpen, setHoverMenuOpen] = useState(false);
+  const hoverCloseTimeoutRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isActive = (pathPrefix) =>
+    location.pathname === pathPrefix || location.pathname.startsWith(pathPrefix + '/');
 
   const { t, i18n } = useTranslation();
 
@@ -59,7 +71,22 @@ function App() {
         try {
           const ref = doc(db, 'users', u.uid);
           const snap = await getDoc(ref);
-          const pref = snap.exists() ? snap.data().preferredLanguage : null;
+          const data = snap.exists() ? snap.data() : null;
+          const pref = data?.preferredLanguage || null;
+          // Derive initials from name fields or displayName
+          const nameSource =
+            data?.name ||
+            `${data?.firstName || ''} ${data?.lastName || ''}`.trim() ||
+            u.displayName ||
+            '';
+          const parts = nameSource.split(/\s+/).filter(Boolean);
+          const initials =
+            parts.length >= 2
+              ? `${parts[0][0]}${parts[1][0]}`
+              : parts.length === 1
+                ? parts[0].slice(0, 2)
+                : '';
+          setUserInitials(initials.toUpperCase());
           if (pref) i18n.changeLanguage(pref);
         } catch {}
       }
@@ -79,6 +106,36 @@ function App() {
     }
   }
 
+  // Handlers for avatar hover menu
+  function handleAvatarMouseEnter(event) {
+    if (hoverCloseTimeoutRef.current) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+    setMenuAnchorEl(event.currentTarget);
+    setHoverMenuOpen(true);
+  }
+
+  function scheduleMenuClose() {
+    // Slight delay to allow moving from avatar to menu without closing
+    const timeout = window.setTimeout(() => {
+      setHoverMenuOpen(false);
+      setMenuAnchorEl(null);
+    }, 400);
+    hoverCloseTimeoutRef.current = timeout;
+  }
+
+  function handleMenuMouseEnter() {
+    if (hoverCloseTimeoutRef.current) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+  }
+
+  function handleMenuMouseLeave() {
+    scheduleMenuClose();
+  }
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
@@ -95,31 +152,131 @@ function App() {
           </Typography>
           {user ? (
             <>
-              <Button color="inherit" component={Link} to="/feed" sx={{ ml: 1 }}>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/feed"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/feed') ? '2px solid #1db954' : '2px solid transparent',
+                  borderRadius: 0,
+                }}
+              >
                 {t('Feed')}
-              </Button>
-              <Button color="inherit" component={Link} to="/albums" sx={{ ml: 1 }}>
-                {t('Álbumes')}
-              </Button>
-              <Button color="inherit" component={Link} to="/top" sx={{ ml: 1 }}>
-                TOP 100
-              </Button>
-              <Button color="inherit" component={Link} to="/groups" sx={{ ml: 1 }}>
-                {t('Grupos')}
-              </Button>
-              <Button color="inherit" component={Link} to="/friends" sx={{ ml: 1 }}>
-                {t('Amigos')}
-              </Button>
-              <Button color="inherit" component={Link} to="/profile" sx={{ ml: 1 }}>
-                {t('Perfil')}
               </Button>
               <Button
                 color="inherit"
-                onClick={handleLogout}
-                sx={{ ml: 2, borderLeft: '1px solid rgba(255,255,255,0.2)', pl: 2 }}
+                component={Link}
+                to="/albums"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/albums') ? '2px solid #1db954' : '2px solid transparent',
+                  borderRadius: 0,
+                }}
               >
-                {t('Cerrar sesión')}
+                {t('Álbumes')}
               </Button>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/top"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/top') ? '2px solid #1db954' : '2px solid transparent',
+                  borderRadius: 0,
+                }}
+              >
+                TOP 100
+              </Button>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/groups"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/groups') ? '2px solid #1db954' : '2px solid transparent',
+                  borderRadius: 0,
+                }}
+              >
+                {t('Grupos')}
+              </Button>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/songs"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/songs') ? '2px solid #1db954' : '2px solid transparent',
+                  borderRadius: 0,
+                }}
+              >
+                {t('Canciones')}
+              </Button>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/friends"
+                sx={{
+                  ml: 1,
+                  borderBottom: isActive('/friends')
+                    ? '2px solid #1db954'
+                    : '2px solid transparent',
+                  borderRadius: 0,
+                }}
+              >
+                {t('Amigos')}
+              </Button>
+              <Box
+                sx={{ ml: 2 }}
+                onMouseEnter={handleAvatarMouseEnter}
+                onMouseLeave={scheduleMenuClose}
+              >
+                <Avatar
+                  sx={{
+                    bgcolor: '#1db954',
+                    color: '#000',
+                    width: 32,
+                    height: 32,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                  onClick={handleAvatarMouseEnter}
+                >
+                  {userInitials || '?'}
+                </Avatar>
+              </Box>
+              <Menu
+                anchorEl={menuAnchorEl}
+                open={hoverMenuOpen}
+                onClose={() => setHoverMenuOpen(false)}
+                MenuListProps={{
+                  onMouseEnter: handleMenuMouseEnter,
+                  onMouseLeave: handleMenuMouseLeave,
+                }}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                keepMounted
+                disableScrollLock
+              >
+                <MenuItem
+                  selected={location.pathname.startsWith('/profile')}
+                  onClick={() => {
+                    setHoverMenuOpen(false);
+                    navigate('/profile');
+                  }}
+                >
+                  {t('Perfil')}
+                </MenuItem>
+                <MenuItem
+                  selected={false}
+                  onClick={() => {
+                    setHoverMenuOpen(false);
+                    handleLogout();
+                  }}
+                >
+                  {t('Cerrar sesión')}
+                </MenuItem>
+              </Menu>
             </>
           ) : (
             <Button color="inherit" component={Link} to="/login">
@@ -195,6 +352,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FriendsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/songs"
+            element={
+              <ProtectedRoute>
+                <SongsPage />
               </ProtectedRoute>
             }
           />

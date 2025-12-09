@@ -26,6 +26,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import toast from 'react-hot-toast';
 import {
   collection,
@@ -41,7 +43,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 
-import { db } from '../../firebase/firestore';
+import { db, incrementAlbumPlay, getAlbumPlayInfo } from '../../firebase/firestore';
 import { getAlbumById } from '../../services/spotifyService';
 import auth from '../../firebase/auth';
 
@@ -56,6 +58,8 @@ export default function AlbumDetail() {
   const [avgRating, setAvgRating] = useState(null);
   const [ownersCount, setOwnersCount] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+  const [myPlayCount, setMyPlayCount] = useState(0);
+  const [myLastPlayedAt, setMyLastPlayedAt] = useState(null);
   const [lists, setLists] = useState([]);
   const [albumListIds, setAlbumListIds] = useState([]);
   const [showLyrics, setShowLyrics] = useState(false);
@@ -67,6 +71,8 @@ export default function AlbumDetail() {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [favoriteTrackIds, setFavoriteTrackIds] = useState([]);
+  const [recommendedByName, setRecommendedByName] = useState('');
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -75,6 +81,15 @@ export default function AlbumDetail() {
         const data = await getAlbumById(albumId);
         setAlbum(data);
         await loadMyRating(data?.id);
+        const u = auth.currentUser;
+        if (u && data?.id) {
+          const info = await getAlbumPlayInfo(u.uid, data.id);
+          setMyPlayCount(info.count || 0);
+          setMyLastPlayedAt(info.lastPlayedAt || null);
+        } else {
+          setMyPlayCount(0);
+          setMyLastPlayedAt(null);
+        }
       } catch (_e) {
         toast.error(t('Error cargando álbum'));
       }
@@ -214,6 +229,78 @@ export default function AlbumDetail() {
     });
     return () => unsub();
   }, [album?.id, user, friends]);
+
+  // Load who recommended this album to me (if accepted)
+  useEffect(() => {
+    async function loadRec() {
+      const u = auth.currentUser;
+      if (!u || !album?.id) return;
+      try {
+        const snap = await getDocs(
+          query(
+            collection(db, 'recommendations'),
+            where('to', '==', u.uid),
+            where('albumId', '==', album.id),
+            where('accepted', '==', true)
+          )
+        );
+        const first = snap.docs[0]?.data();
+        if (first?.from) {
+          const frSnap = await getDocs(
+            query(collection(db, 'friends'), where('userId', '==', u.uid))
+          );
+          const list = frSnap.docs.map((d) => d.data());
+          const m = list.find((f) => f.friendUid === first.from);
+          setRecommendedByName(m?.friendName || first.from);
+        } else {
+          setRecommendedByName('');
+        }
+      } catch (error_) {
+        setRecommendedByName('');
+      }
+    }
+    loadRec();
+  }, [album?.id]);
+
+  // Subscribe to my favorite tracks for this album
+  useEffect(() => {
+    if (!album?.id || !user) return;
+    const favRef = collection(db, 'trackFavorites');
+    const qFav = query(favRef, where('uid', '==', user.uid), where('albumId', '==', album.id));
+    const unsub = onSnapshot(qFav, (snap) => {
+      const ids = snap.docs.map((d) => d.data().trackId).filter(Boolean);
+      setFavoriteTrackIds(ids);
+    });
+    return () => unsub();
+  }, [album?.id, user]);
+
+  async function toggleFavoriteTrack(track) {
+    if (!user || !album || !track?.id) return;
+    const isFav = favoriteTrackIds.includes(track.id);
+    try {
+      if (isFav) {
+        // remove favorite doc(s)
+        const qDel = query(
+          collection(db, 'trackFavorites'),
+          where('uid', '==', user.uid),
+          where('albumId', '==', album.id),
+          where('trackId', '==', track.id)
+        );
+        const delSnap = await getDocs(qDel);
+        await Promise.all(delSnap.docs.map((d) => deleteDoc(doc(db, 'trackFavorites', d.id))));
+      } else {
+        await addDoc(collection(db, 'trackFavorites'), {
+          uid: user.uid,
+          albumId: album.id,
+          trackId: track.id,
+          trackName: track.name,
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (_e) {
+      toast.error(t('Error al actualizar favorito'));
+    }
+  }
 
   async function addComment() {
     if (!user || !album) return toast.error(t('Accede para comentar'));
@@ -435,9 +522,25 @@ export default function AlbumDetail() {
             <Typography variant="body2" sx={{ color: '#aaa' }}>
               {t('Año')}: {year}
             </Typography>
+            {recommendedByName && (
+              <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
+                {t('Recomendado por')}: {recommendedByName}
+              </Typography>
+            )}
             <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
               {t('Añadido por')}: {ownersCount > 0 ? `${ownersCount} ${t('personas')}` : '-'}
             </Typography>
+            <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
+              {t('Veces reproducido por ti')}: {myPlayCount}
+            </Typography>
+            {myLastPlayedAt && (
+              <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
+                {t('Última reproducción')}:{' '}
+                {myLastPlayedAt?.toDate
+                  ? new Date(myLastPlayedAt.toDate()).toLocaleString()
+                  : new Date(myLastPlayedAt).toLocaleString()}
+              </Typography>
+            )}
             <Box sx={{ mt: 2 }}>
               <div style={{ fontWeight: 600 }}>{t('Tu puntuación')}</div>
               <Box
@@ -472,7 +575,12 @@ export default function AlbumDetail() {
             </Box>
             <div style={{ marginTop: 16 }}>
               <IconButton
-                onClick={() => window.open(`https://open.spotify.com/album/${album.id}`, '_blank')}
+                onClick={() => {
+                  if (user && album?.id) {
+                    incrementAlbumPlay(user.uid, album.id).catch(() => {});
+                  }
+                  window.open(`https://open.spotify.com/album/${album.id}`, '_blank');
+                }}
                 sx={{ color: '#1db954' }}
               >
                 <PlayArrowIcon />
@@ -568,11 +676,21 @@ export default function AlbumDetail() {
               <ListItem
                 key={track.id || idx}
                 secondaryAction={
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <IconButton
-                      onClick={() =>
-                        window.open(`https://open.spotify.com/track/${track.id}`, '_blank')
-                      }
+                      onClick={() => toggleFavoriteTrack(track)}
+                      sx={{ color: favoriteTrackIds.includes(track.id) ? '#ffd700' : '#aaa' }}
+                      aria-label={t('Marcar como favorito')}
+                    >
+                      {favoriteTrackIds.includes(track.id) ? <StarIcon /> : <StarBorderIcon />}
+                    </IconButton>
+                    <IconButton
+                      onClick={() => {
+                        if (user && album?.id) {
+                          incrementAlbumPlay(user.uid, album.id).catch(() => {});
+                        }
+                        window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
+                      }}
                       sx={{ color: '#1db954' }}
                       aria-label={t('Escuchar en Spotify')}
                     >
