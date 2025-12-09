@@ -2,16 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Container,
   Grid,
-  TextField,
   Button,
-  Paper,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  IconButton,
   ButtonGroup,
   Dialog,
   DialogTitle,
@@ -21,10 +12,9 @@ import {
   ListItem,
   ListItemText,
   ListItemButton,
-  CircularProgress,
-  Box,
   useMediaQuery,
   Typography,
+  Paper,
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import {
@@ -36,14 +26,9 @@ import {
   setDoc,
   doc,
   deleteDoc,
-  serverTimestamp,
 } from 'firebase/firestore';
-import ShareIcon from '@mui/icons-material/Share';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import CheckIcon from '@mui/icons-material/Check';
-import DeleteIcon from '@mui/icons-material/Delete';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 import { db } from '../../firebase/firestore';
 import AlbumCover from '../common/AlbumCover';
@@ -66,6 +51,13 @@ import auth from '../../firebase/auth';
 import { getArtistEvents } from '../../services/eventsService';
 import { searchAlbums, getArtistAlbums } from '../../services/spotifyService';
 
+import RecommendedTables from './RecommendedTables';
+import MyAlbumsTable from './MyAlbumsTable';
+import NewsGrid from './NewsGrid';
+import ConcertsGrid from './ConcertsGrid';
+import ListsTable from './ListsTable';
+import RightPane from './RightPane';
+
 export default function AlbumsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -79,7 +71,6 @@ export default function AlbumsPage() {
   const [acceptedRecs, setAcceptedRecs] = useState([]);
   const [activeTab, setActiveTab] = useState('myAlbums');
   const [friends, setFriends] = useState([]);
-  const [_friendsLoading, setFriendsLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [news, setNews] = useState([]);
@@ -122,7 +113,6 @@ export default function AlbumsPage() {
     });
     const unsubFriends = subscribeFriends(user.uid, (items) => {
       setFriends(items);
-      setFriendsLoading(false);
     });
     const unsubLists = subscribeLists(user.uid, (items) => {
       setLists(items);
@@ -148,16 +138,16 @@ export default function AlbumsPage() {
       const myMap = {};
       const totals = {};
       const counts = {};
-      items.forEach((data) => {
-        if (!data.albumId || typeof data.value !== 'number') return;
+      for (const data of items) {
+        if (!data.albumId || typeof data.value !== 'number') continue;
         if (data.uid === user.uid) myMap[data.albumId] = data.value;
         totals[data.albumId] = (totals[data.albumId] || 0) + data.value;
         counts[data.albumId] = (counts[data.albumId] || 0) + 1;
-      });
+      }
       const avgMap = {};
-      Object.keys(totals).forEach((id) => {
+      for (const id of Object.keys(totals)) {
         avgMap[id] = totals[id] / counts[id];
-      });
+      }
       setMyRatings(myMap);
       setAvgRatings(avgMap);
     });
@@ -173,21 +163,6 @@ export default function AlbumsPage() {
     } finally {
       setSearchLoading(false);
     }
-  }
-
-  async function searchByArtist(artistName) {
-    setQ(artistName);
-    setSearchLoading(true);
-    try {
-      const r = await searchAlbums(artistName, token);
-      setResults(r);
-    } finally {
-      setSearchLoading(false);
-    }
-    // Scroll to results
-    setTimeout(() => {
-      document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
   }
 
   async function loadNewsFromFavorites() {
@@ -229,7 +204,9 @@ export default function AlbumsPage() {
       const events = [];
       for (const fav of favs) {
         const artistEvents = await getArtistEvents(fav.name);
-        artistEvents.forEach((e) => events.push({ ...e, artistName: fav.name }));
+        for (const e of artistEvents) {
+          events.push({ ...e, artistName: fav.name });
+        }
       }
       // Remove duplicates by id
       const byId = {};
@@ -298,34 +275,6 @@ export default function AlbumsPage() {
     }
   }
 
-  async function _addAlbumToList(listId, album) {
-    if (!user) return;
-    if (!listId) return;
-    try {
-      const albumId = album.albumId || album.id;
-      // prevent duplicates within list
-      const name = album.name;
-      const artists = Array.isArray(album.artists)
-        ? album.artists.map((a) => a.name ?? a).join(', ')
-        : album.artists || '';
-      const images = album.images || [];
-      const releaseDate = album.releaseDate || album.release_date || null;
-      await addDoc(collection(db, 'listAlbums'), {
-        owner: user.uid,
-        listId,
-        albumId,
-        name,
-        artists,
-        images,
-        releaseDate,
-        createdAt: serverTimestamp(),
-      });
-      toast.success(t('Álbum añadido a la lista'));
-    } catch (_e) {
-      toast.error(t('Error al añadir a la lista'));
-    }
-  }
-
   async function deleteAlbum(albumId) {
     try {
       await deleteDoc(doc(db, 'albums', albumId));
@@ -349,10 +298,10 @@ export default function AlbumsPage() {
     try {
       // Build a set of albumIds currently visible across lists
       const albumIds = new Set();
-      myAlbums.forEach((a) => albumIds.add(a.albumId));
-      results.forEach((r) => albumIds.add(r.albumId || r.id));
-      recommended.forEach((rec) => albumIds.add(rec.albumId));
-      acceptedRecs.forEach((rec) => albumIds.add(rec.albumId));
+      for (const a of myAlbums) albumIds.add(a.albumId);
+      for (const r of results) albumIds.add(r.albumId || r.id);
+      for (const rec of recommended) albumIds.add(rec.albumId);
+      for (const rec of acceptedRecs) albumIds.add(rec.albumId);
       for (const id of albumIds) {
         await refreshOwnersForAlbum(id);
       }
@@ -410,13 +359,13 @@ export default function AlbumsPage() {
     recommendedBy: r.from,
   }));
   const byId = new Map();
-  acceptedAsAlbums.forEach((a) => {
+  for (const a of acceptedAsAlbums) {
     if (!byId.has(a.albumId)) byId.set(a.albumId, a);
-  });
-  myAlbums.forEach((a) => {
+  }
+  for (const a of myAlbums) {
     // overwrite with real saved album
     byId.set(a.albumId, a);
-  });
+  }
   const myAlbumsCombined = Array.from(byId.values());
 
   const sortedMyAlbums = [...myAlbumsCombined].sort((a, b) => {
@@ -589,794 +538,110 @@ export default function AlbumsPage() {
           </ButtonGroup>
 
           {activeTab === 'myAlbums' && (
-            <Paper sx={{ p: 2 }}>
-              <h3>
-                {t('Mis álbumes')} ({myAlbumsCombined.length})
-              </h3>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder={t('Buscar en mis álbumes')}
-                  value={myFilter}
-                  onChange={(e) => setMyFilter(e.target.value)}
-                />
-                <Button
-                  variant="outlined"
-                  onClick={() => setMyFilter('')}
-                  sx={{
-                    borderColor: '#1db954',
-                    color: '#1db954',
-                    fontWeight: 600,
-                    px: 2,
-                    '&:hover': { borderColor: '#1ed760', bgcolor: 'rgba(29,185,84,0.1)' },
-                  }}
-                >
-                  {t('Limpiar')}
-                </Button>
-              </Box>
-              {myLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CircularProgress size={20} />
-                  <span>{t('Cargando...')}</span>
-                </Box>
-              )}
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell></TableCell>
-                      <TableCell
-                        onClick={() => toggleSort('name')}
-                        sx={{ cursor: 'pointer', width: 200 }}
-                      >
-                        {t('Nombre')} {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell
-                        onClick={() => toggleSort('artists')}
-                        sx={{ cursor: 'pointer', width: 220 }}
-                      >
-                        {t('Artistas')}{' '}
-                        {sortKey === 'artists' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
-                        {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
-                        {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell onClick={() => toggleSort('my')} sx={{ cursor: 'pointer' }}>
-                        {t('Mi puntuación')}{' '}
-                        {sortKey === 'my' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell onClick={() => toggleSort('added')} sx={{ cursor: 'pointer' }}>
-                        {t('Añadido')} {sortKey === 'added' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredMyAlbums.map((a) => (
-                      <TableRow key={a.id}>
-                        <TableCell sx={{ p: 0 }}>
-                          <AlbumCover
-                            images={a.images || a.album?.images}
-                            alt={a.name}
-                            onClick={() => navigate(`/album/${a.albumId}`)}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 200 }}>
-                          <span
-                            style={{
-                              cursor: 'pointer',
-                              color: '#1db954',
-                              textDecoration: 'underline',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: 'inline-block',
-                              maxWidth: '100%',
-                            }}
-                            onClick={() => navigate(`/album/${a.albumId}`)}
-                          >
-                            {a.name}
-                          </span>
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 220 }}>
-                          <span
-                            onClick={() => searchByArtist(a.artists)}
-                            style={{
-                              cursor: 'pointer',
-                              color: '#1db954',
-                              textDecoration: 'underline',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: 'inline-block',
-                              maxWidth: '100%',
-                            }}
-                          >
-                            {a.artists}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {typeof avgRatings[a.albumId] === 'number'
-                            ? Number(avgRatings[a.albumId]).toFixed(1)
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {typeof myRatings[a.albumId] === 'number' ? myRatings[a.albumId] : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {a.addedAt?.toDate
-                            ? new Date(a.addedAt.toDate()).toLocaleDateString()
-                            : a.addedAt
-                              ? new Date(a.addedAt).toLocaleDateString()
-                              : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <IconButton
-                            onClick={() => {
-                              if (user && a.albumId) {
-                                incrementAlbumPlay(user.uid, a.albumId).catch(() => {});
-                              }
-                              window.open(`https://open.spotify.com/album/${a.albumId}`, '_blank');
-                            }}
-                            sx={{ color: '#1db954' }}
-                          >
-                            <PlayArrowIcon />
-                          </IconButton>
-                          <IconButton onClick={() => openRecommendDialog(a)}>
-                            <ShareIcon />
-                          </IconButton>
-                          <IconButton onClick={() => deleteAlbum(a.id)} color="error">
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
+            <MyAlbumsTable
+              t={t}
+              myAlbumsCombined={filteredMyAlbums}
+              myLoading={myLoading}
+              myFilter={myFilter}
+              setMyFilter={setMyFilter}
+              avgRatings={avgRatings}
+              myRatings={myRatings}
+              ownersByAlbumId={ownersByAlbumId}
+              user={user}
+              toggleSort={toggleSort}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              navigate={navigate}
+              incrementAlbumPlay={incrementAlbumPlay}
+              openRecommendDialog={openRecommendDialog}
+              deleteAlbum={deleteAlbum}
+            />
           )}
 
           {activeTab === 'recommended' && (
-            <>
-              <Paper sx={{ p: 2, mb: 3 }}>
-                <h3>
-                  {t('Álbumes recomendados por mis amigos (pendientes)')} ({recommended.length})
-                </h3>
-                {recLoading && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                    <CircularProgress size={20} />
-                    <span>{t('Cargando...')}</span>
-                  </Box>
-                )}
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell></TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecPend('albumName')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Álbum')}{' '}
-                          {sortKeyRecPend === 'albumName'
-                            ? sortDirRecPend === 'asc'
-                              ? '▲'
-                              : '▼'
-                            : ''}
-                        </TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecPend('artist')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Artista')}{' '}
-                          {sortKeyRecPend === 'artist'
-                            ? sortDirRecPend === 'asc'
-                              ? '▲'
-                              : '▼'
-                            : ''}
-                        </TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecPend('year')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Año')}{' '}
-                          {sortKeyRecPend === 'year' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
-                        </TableCell>
-                        <TableCell>{t('Añadido por')}</TableCell>
-                        <TableCell>{t('Media')}</TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecPend('from')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Recomendado por')}{' '}
-                          {sortKeyRecPend === 'from' ? (sortDirRecPend === 'asc' ? '▲' : '▼') : ''}
-                        </TableCell>
-                        <TableCell></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {sortedRecommended.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell sx={{ p: 0 }}>
-                            <AlbumCover
-                              images={r.images}
-                              alt={r.albumName}
-                              onClick={() => navigate(`/album/${r.albumId}`)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              style={{
-                                cursor: 'pointer',
-                                color: '#1db954',
-                                textDecoration: 'underline',
-                              }}
-                              onClick={() => navigate(`/album/${r.albumId}`)}
-                            >
-                              {r.albumName}
-                            </span>
-                          </TableCell>
-                          <TableCell>{r.artist}</TableCell>
-                          <TableCell>
-                            {r.releaseDate ? new Date(r.releaseDate).getFullYear() : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {ownersByAlbumId[r.albumId]?.length
-                              ? `${ownersByAlbumId[r.albumId].length} ${t('personas')}`
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {typeof avgRatings[r.albumId] === 'number'
-                              ? Number(avgRatings[r.albumId]).toFixed(1)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>{getRecommenderName(r.from)}</TableCell>
-                          <TableCell>
-                            <IconButton
-                              onClick={() => {
-                                if (user && r.albumId) {
-                                  incrementAlbumPlay(user.uid, r.albumId).catch(() => {});
-                                }
-                                window.open(
-                                  `https://open.spotify.com/album/${r.albumId}`,
-                                  '_blank'
-                                );
-                              }}
-                              sx={{ color: '#1db954' }}
-                            >
-                              <PlayArrowIcon />
-                            </IconButton>
-                            <IconButton onClick={() => acceptRecommendation(r)} color="success">
-                              <CheckIcon />
-                            </IconButton>
-                            <IconButton onClick={() => deleteRecommendation(r.id)} color="error">
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-              <Paper sx={{ p: 2 }}>
-                <h3>
-                  {t('Recomendaciones aceptadas')} ({acceptedRecs.length})
-                </h3>
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell></TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecAcc('albumName')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Álbum')}{' '}
-                          {sortKeyRecAcc === 'albumName'
-                            ? sortDirRecAcc === 'asc'
-                              ? '▲'
-                              : '▼'
-                            : ''}
-                        </TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecAcc('artist')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Artista')}{' '}
-                          {sortKeyRecAcc === 'artist' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
-                        </TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecAcc('year')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Año')}{' '}
-                          {sortKeyRecAcc === 'year' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
-                        </TableCell>
-                        <TableCell>{t('Añadido por')}</TableCell>
-                        <TableCell>{t('Media')}</TableCell>
-                        <TableCell
-                          onClick={() => toggleSortRecAcc('from')}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          {t('Recomendado por')}{' '}
-                          {sortKeyRecAcc === 'from' ? (sortDirRecAcc === 'asc' ? '▲' : '▼') : ''}
-                        </TableCell>
-                        <TableCell></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {sortedAcceptedRecs.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell sx={{ p: 0 }}>
-                            <AlbumCover
-                              images={r.images}
-                              alt={r.albumName}
-                              onClick={() => navigate(`/album/${r.albumId}`)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              style={{
-                                cursor: 'pointer',
-                                color: '#1db954',
-                                textDecoration: 'underline',
-                              }}
-                              onClick={() => navigate(`/album/${r.albumId}`)}
-                            >
-                              {r.albumName}
-                            </span>
-                          </TableCell>
-                          <TableCell>{r.artist}</TableCell>
-                          <TableCell>
-                            {r.releaseDate ? new Date(r.releaseDate).getFullYear() : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {ownersByAlbumId[r.albumId]?.length
-                              ? `${ownersByAlbumId[r.albumId].length} ${t('personas')}`
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {typeof avgRatings[r.albumId] === 'number'
-                              ? Number(avgRatings[r.albumId]).toFixed(1)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>{getRecommenderName(r.from)}</TableCell>
-                          <TableCell>
-                            <IconButton
-                              onClick={() => {
-                                if (user && r.albumId) {
-                                  incrementAlbumPlay(user.uid, r.albumId).catch(() => {});
-                                }
-                                window.open(
-                                  `https://open.spotify.com/album/${r.albumId}`,
-                                  '_blank'
-                                );
-                              }}
-                              sx={{ color: '#1db954' }}
-                            >
-                              <PlayArrowIcon />
-                            </IconButton>
-                            <IconButton onClick={() => deleteRecommendation(r.id)} color="error">
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-            </>
+            <RecommendedTables
+              t={t}
+              recLoading={recLoading}
+              sortedRecommended={sortedRecommended}
+              sortedAcceptedRecs={sortedAcceptedRecs}
+              avgRatings={avgRatings}
+              ownersByAlbumId={ownersByAlbumId}
+              user={user}
+              navigate={navigate}
+              incrementAlbumPlay={incrementAlbumPlay}
+              toggleSortRecPend={toggleSortRecPend}
+              sortKeyRecPend={sortKeyRecPend}
+              sortDirRecPend={sortDirRecPend}
+              toggleSortRecAcc={toggleSortRecAcc}
+              sortKeyRecAcc={sortKeyRecAcc}
+              sortDirRecAcc={sortDirRecAcc}
+              getRecommenderName={getRecommenderName}
+              acceptRecommendation={acceptRecommendation}
+              deleteRecommendation={deleteRecommendation}
+            />
           )}
 
           {activeTab === 'news' && (
-            <Paper sx={{ p: 2 }}>
-              <h3>
-                {t('Novedades basadas en tus favoritos')} ({news.length})
-              </h3>
-              {newsLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CircularProgress size={20} />
-                  <span>{t('Cargando...')}</span>
-                </Box>
-              )}
-              <Grid container spacing={1} sx={{ mt: 1 }}>
-                {news.map((album) => (
-                  <Grid item key={album.id} xs={12} sm={6} md={3}>
-                    <Paper sx={{ p: 2 }}>
-                      <AlbumCover
-                        images={album.images}
-                        alt={album.name}
-                        className="album-card-cover"
-                        onClick={() => navigate(`/album/${album.id}`)}
-                      />
-                      <div
-                        style={{
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        <strong
-                          className="link-underline"
-                          onClick={() => navigate(`/album/${album.id}`)}
-                          title={album.name}
-                        >
-                          {album.name}
-                        </strong>
-                      </div>
-                      <div
-                        style={{
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                        title={album.artists?.map((a) => a.name).join(', ')}
-                      >
-                        {album.artists?.map((a) => a.name).join(', ')}
-                      </div>
-                      <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>
-                        {album.release_date ? new Date(album.release_date).getFullYear() : ''}
-                      </div>
-                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <IconButton
-                          onClick={() => {
-                            if (user && album.id) {
-                              incrementAlbumPlay(user.uid, album.id).catch(() => {});
-                            }
-                            const url =
-                              album.external_urls?.spotify ||
-                              `https://open.spotify.com/album/${album.id}`;
-                            window.open(url, '_blank');
-                          }}
-                          sx={{
-                            color: '#1db954',
-                            mt: 1,
-                            display: 'inline-flex',
-                            alignSelf: 'flex-start',
-                          }}
-                          aria-label={t('Escuchar en Spotify')}
-                        >
-                          <PlayArrowIcon />
-                        </IconButton>
-                        <Button
-                          variant="contained"
-                          sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                          onClick={() =>
-                            saveAlbum({
-                              id: album.id,
-                              name: album.name,
-                              artists: album.artists,
-                              images: album.images,
-                              release_date: album.release_date,
-                            })
-                          }
-                          disabled={myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)}
-                        >
-                          {myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)
-                            ? t('Ya en tu colección')
-                            : t('Añadir a mi colección')}
-                        </Button>
-                      </Box>
-                    </Paper>
-                  </Grid>
-                ))}
-                {news.length === 0 && !newsLoading && (
-                  <Grid item xs={12}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                      <span>{t('No hay novedades recientes')}</span>
-                    </Paper>
-                  </Grid>
-                )}
-              </Grid>
-            </Paper>
+            <NewsGrid
+              t={t}
+              news={news}
+              newsLoading={newsLoading}
+              user={user}
+              navigate={navigate}
+              incrementAlbumPlay={incrementAlbumPlay}
+              saveAlbum={saveAlbum}
+              myAlbums={myAlbums}
+            />
           )}
 
           {activeTab === 'concerts' && (
-            <Paper sx={{ p: 2 }}>
-              <h3>
-                {t('Conciertos de tus favoritos')} ({concerts.length})
-              </h3>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder={t('Filtrar conciertos por cualquier campo')}
-                  value={concertsFilter}
-                  onChange={(e) => setConcertsFilter(e.target.value)}
-                />
-                <Button variant="outlined" onClick={() => setConcertsFilter('')}>
-                  {t('Limpiar')}
-                </Button>
-              </Box>
-              {concertsLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CircularProgress size={20} />
-                  <span>{t('Cargando...')}</span>
-                </Box>
-              )}
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                {concerts
-                  .filter((ev) => {
-                    if (!concertsFilter) return true;
-                    const ql = concertsFilter.toLowerCase();
-                    const fields = [ev.name, ev.artistName, ev.city, ev.venue, ev.date, ev.url];
-                    return fields.filter(Boolean).some((v) => String(v).toLowerCase().includes(ql));
-                  })
-                  .map((ev) => (
-                    <Grid item key={ev.id} xs={12} sm={6} md={4}>
-                      <Paper sx={{ p: 2 }}>
-                        <div style={{ fontWeight: 600 }}>{ev.name}</div>
-                        <div style={{ color: '#999' }}>{ev.artistName}</div>
-                        <div style={{ marginTop: 4 }}>
-                          {ev.date ? new Date(ev.date).toLocaleDateString() : '-'}
-                        </div>
-                        <div style={{ color: '#777' }}>
-                          {ev.city} {ev.venue ? `- ${ev.venue}` : ''}
-                        </div>
-                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                          {ev.url && (
-                            <Button
-                              variant="contained"
-                              sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                              onClick={() => window.open(ev.url, '_blank')}
-                            >
-                              {t('Ver entradas')}
-                            </Button>
-                          )}
-                        </Box>
-                      </Paper>
-                    </Grid>
-                  ))}
-                {concerts.length === 0 && !concertsLoading && (
-                  <Grid item xs={12}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                      <span>{t('No hay conciertos próximos')}</span>
-                    </Paper>
-                  </Grid>
-                )}
-              </Grid>
-            </Paper>
+            <ConcertsGrid
+              t={t}
+              concerts={concerts}
+              concertsLoading={concertsLoading}
+              concertsFilter={concertsFilter}
+              setConcertsFilter={setConcertsFilter}
+            />
           )}
 
           {activeTab === 'lists' && (
-            <Paper sx={{ p: 2 }}>
-              <h3>
-                {t('Mis listas')} ({lists.length})
-              </h3>
-              {listsLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CircularProgress size={20} />
-                  <span>{t('Cargando...')}</span>
-                </Box>
-              )}
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                  size="small"
-                  placeholder={t('Nombre de la nueva lista')}
-                  value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                />
-                <Button
-                  variant="contained"
-                  sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                  onClick={createList}
-                >
-                  {t('Crear lista')}
-                </Button>
-              </Box>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>{t('Nombre')}</TableCell>
-                      <TableCell>{t('Creada')}</TableCell>
-                      <TableCell>{t('Álbumes')}</TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {lists.map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell>
-                          {editingListId === l.id ? (
-                            <TextField
-                              size="small"
-                              value={editingListName}
-                              onChange={(e) => setEditingListName(e.target.value)}
-                            />
-                          ) : (
-                            <span
-                              style={{
-                                cursor: 'pointer',
-                                color: '#1db954',
-                                textDecoration: 'underline',
-                              }}
-                              onClick={() => navigate(`/list/${l.id}`)}
-                              title={l.name}
-                            >
-                              {l.name}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {Array.isArray(listAlbumCounts?.[l.id])
-                            ? listAlbumCounts[l.id].length
-                            : listAlbumCounts?.[l.id] || 0}
-                        </TableCell>
-                        <TableCell>
-                          {editingListId === l.id ? (
-                            <Button
-                              onClick={saveEditList}
-                              sx={{ mr: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                              variant="contained"
-                            >
-                              {t('Guardar')}
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => startEditList(l)}
-                              sx={{ mr: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                              variant="contained"
-                            >
-                              {t('Editar')}
-                            </Button>
-                          )}
-                          <Button onClick={() => deleteList(l.id)} color="error" variant="outlined">
-                            {t('Eliminar')}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {lists.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center">
-                          {t('No tienes listas aún')}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
+            <ListsTable
+              t={t}
+              lists={lists}
+              listsLoading={listsLoading}
+              newListName={newListName}
+              setNewListName={setNewListName}
+              editingListId={editingListId}
+              editingListName={editingListName}
+              setEditingListName={setEditingListName}
+              startEditList={startEditList}
+              saveEditList={saveEditList}
+              deleteList={deleteList}
+              listAlbumCounts={listAlbumCounts}
+              navigate={navigate}
+              createList={createList}
+            />
           )}
         </Grid>
 
         {/* Right: Search and results (or top on narrow) */}
-        <Grid item xs={12} md={isNarrow ? 12 : 6} sx={{ p: 3, order: isNarrow ? 1 : 0 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={9}>
-              <TextField
-                fullWidth
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder={t('Buscar álbumes')}
-              />
-            </Grid>
-            <Grid item xs={3}>
-              <Button
-                onClick={handleSearch}
-                disabled={searchLoading}
-                variant="contained"
-                color="primary"
-                sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-              >
-                {searchLoading ? t('Buscando...') : 'Buscar'}
-              </Button>
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={2} sx={{ mt: 3 }} id="results-section">
-            <Grid item xs={12}>
-              {q && <h3>{t('Resultados')}</h3>}
-              {searchLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <CircularProgress size={20} />
-                  <span>{t('Buscando...')}</span>
-                </Box>
-              )}
-              {q && (
-                <Grid container spacing={2}>
-                  {results.map((album) => (
-                    <Grid item key={album.id} xs={12} sm={6} md={3}>
-                      <Paper sx={{ p: 2 }}>
-                        <AlbumCover
-                          images={album.images}
-                          alt={album.name}
-                          onClick={() => navigate(`/album/${album.id}`)}
-                          className="album-card-cover"
-                        />
-                        <div
-                          style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          <strong
-                            style={{
-                              cursor: 'pointer',
-                              color: '#1db954',
-                              textDecoration: 'underline',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: 'inline-block',
-                              maxWidth: '100%',
-                            }}
-                            onClick={() => navigate(`/album/${album.id}`)}
-                            title={album.name}
-                          >
-                            {album.name}
-                          </strong>
-                        </div>
-                        <div
-                          style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                          title={album.artists.map((a) => a.name).join(', ')}
-                        >
-                          {album.artists.map((a) => a.name).join(', ')}
-                        </div>
-                        <div style={{ color: '#999', fontSize: '0.9em', marginTop: 4 }}>
-                          {album.release_date ? new Date(album.release_date).getFullYear() : ''}
-                        </div>
-                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                          <IconButton
-                            onClick={() => {
-                              if (user && album.id) {
-                                incrementAlbumPlay(user.uid, album.id).catch(() => {});
-                              }
-                              window.open(`https://open.spotify.com/album/${album.id}`, '_blank');
-                            }}
-                            sx={{
-                              color: '#1db954',
-                              mt: 1,
-                              display: 'inline-flex',
-                              alignSelf: 'flex-start',
-                            }}
-                            aria-label={t('Escuchar en Spotify')}
-                          >
-                            <PlayArrowIcon />
-                          </IconButton>
-                          <Button
-                            variant="contained"
-                            sx={{ mt: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                            onClick={() => saveAlbum(album)}
-                            disabled={myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)}
-                          >
-                            {myAlbums.some((a) => (a.albumId || a.album?.id) === album.id)
-                              ? t('Ya en tu colección')
-                              : t('Añadir a mi colección')}
-                          </Button>
-                        </Box>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              )}
-            </Grid>
-          </Grid>
-        </Grid>
+        <RightPane
+          t={t}
+          q={q}
+          setQ={setQ}
+          searchLoading={searchLoading}
+          handleSearch={handleSearch}
+          results={results}
+          navigate={navigate}
+          user={user}
+          incrementAlbumPlay={incrementAlbumPlay}
+          saveAlbum={saveAlbum}
+          myAlbums={myAlbums}
+        />
       </Grid>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Recomendar a un amigo</DialogTitle>
+        <DialogTitle>{t('Recomendar a un amigo')}</DialogTitle>
         <DialogContent>
           {selectedAlbum && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: '#2a2a2a' }}>
