@@ -60,9 +60,12 @@ export default function SongsPage() {
 
   return (
     <Container maxWidth="md" sx={{ mt: 2 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        {t('Canciones favoritas')}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          {t('Canciones favoritas')}
+        </Typography>
+        {/* Aquí puedes añadir controles futuros, como selector de vista, filtros, etc. */}
+      </Box>
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={24} />

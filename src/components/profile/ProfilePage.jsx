@@ -31,6 +31,10 @@ import { db } from '../../firebase/firestore';
 import auth from '../../firebase/auth';
 
 export default function ProfilePage() {
+  // Formateador para números grandes
+  const formatFollowers = (n) => {
+    return n ? new Intl.NumberFormat('es-ES').format(n) : '0';
+  };
   const user = auth.currentUser;
   const [form, setForm] = useState({
     fullName: '',
@@ -319,7 +323,7 @@ export default function ProfilePage() {
                     )}
                     <ListItemText
                       primary={ar.name}
-                      secondary={t('Seguidores') + ': ' + (ar.followers?.total || 0)}
+                      secondary={t('Seguidores') + ': ' + formatFollowers(ar.followers?.total)}
                     />
                   </ListItemButton>
                 </ListItem>
