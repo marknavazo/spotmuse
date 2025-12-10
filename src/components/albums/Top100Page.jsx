@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useMediaQuery } from '@mui/material';
 import {
   Container,
   Grid,
@@ -120,10 +121,21 @@ export default function Top100Page() {
     }
   }
 
+  // Responsive columns
+  const lt800 = useMediaQuery('(max-width:800px)');
+  const lt1200 = useMediaQuery('(max-width:1200px)');
+  const lt1600 = useMediaQuery('(max-width:1600px)');
+  let itemWidth = '12.5%'; // 8 per row
+  if (lt800)
+    itemWidth = '50%'; // 2 per row
+  else if (lt1200)
+    itemWidth = '25%'; // 4 per row
+  else if (lt1600) itemWidth = '16.6667%'; // 6 per row
+
   return (
     <Container maxWidth={false} sx={{ mt: 2, px: 2 }}>
       <Typography variant="h4" sx={{ mb: 2 }}>
-        TOP 100 — {t('Mejor puntuación media')}
+        TOP 100 - {t('Mejor puntuación media')}
       </Typography>
       {loading ? (
         <CircularProgress />
@@ -140,7 +152,7 @@ export default function Top100Page() {
                 item
                 key={albumId}
                 sx={{
-                  width: '12.5%',
+                  width: itemWidth,
                   flexGrow: 0,
                   flexShrink: 0,
                 }}

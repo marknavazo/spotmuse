@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "your-firebase-project-id"
-  }
+    "spotmuse": "spotmuse-da191",
+    "default": "spotmuse-da191"
+  },
+  "targets": {},
+  "etags": {}
 }
