@@ -352,7 +352,7 @@ export default function ProfilePage() {
               {[...(form.favoriteArtists || [])]
                 .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                 .map((f) => (
-                  <Grid item key={f.id} xs={12} sm={6}>
+                  <Grid item key={f.id} xs={12} sm={6} md={6} lg={4}>
                     <Paper
                       sx={{
                         p: 2,
