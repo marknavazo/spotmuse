@@ -13,7 +13,15 @@ import {
   Box,
   Menu,
   MenuItem,
+  useMediaQuery,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import Badge from '@mui/material/Badge';
 import IconButton from '@mui/material/IconButton';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
@@ -57,6 +65,8 @@ const darkTheme = createTheme({
 });
 
 function App() {
+  const isMobileMenu = useMediaQuery('(max-width:850px)');
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const queryClient = new QueryClient();
   const [user, setUser] = useState(null);
   const [userInitials, setUserInitials] = useState('');
@@ -199,7 +209,71 @@ function App() {
             >
               {t('SpotMuse')}
             </Typography>
-            {user ? (
+            {isMobileMenu ? (
+              <>
+                <IconButton color="inherit" onClick={() => setDrawerOpen(true)}>
+                  <MenuIcon />
+                </IconButton>
+                <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+                  <Box sx={{ width: 250 }} role="presentation">
+                    <List>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/feed">
+                          <ListItemText primary={t('Feed')} />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/albums">
+                          <ListItemText primary={t('Álbumes')} />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/top">
+                          <ListItemText primary="TOP 100" />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/groups">
+                          <ListItemText primary={t('Grupos')} />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/songs">
+                          <ListItemText primary={t('Canciones')} />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton component={Link} to="/friends">
+                          <ListItemText primary={t('Amigos')} />
+                        </ListItemButton>
+                      </ListItem>
+                    </List>
+                    <List>
+                      <ListItem disablePadding>
+                        <ListItemButton
+                          onClick={() => {
+                            setDrawerOpen(false);
+                            navigate('/profile');
+                          }}
+                        >
+                          <ListItemText primary={t('Perfil')} />
+                        </ListItemButton>
+                      </ListItem>
+                      <ListItem disablePadding>
+                        <ListItemButton
+                          onClick={() => {
+                            setDrawerOpen(false);
+                            handleLogout();
+                          }}
+                        >
+                          <ListItemText primary={t('Cerrar sesión')} />
+                        </ListItemButton>
+                      </ListItem>
+                    </List>
+                  </Box>
+                </Drawer>
+              </>
+            ) : user ? (
               <>
                 <Button
                   color="inherit"
@@ -281,53 +355,6 @@ function App() {
                 >
                   {t('Amigos')}
                 </Button>
-                {/* Alerts bell */}
-                <Box sx={{ ml: 1 }}>
-                  <IconButton
-                    aria-label={t('Alertas')}
-                    onClick={(e) => {
-                      setAlertsAnchorEl(e.currentTarget);
-                      setAlertsOpen(true);
-                    }}
-                    sx={{ color: 'inherit' }}
-                  >
-                    <Badge
-                      badgeContent={
-                        (dismissedRec ? 0 : pendingRecCount) +
-                        (dismissedFollowers ? 0 : followersCount)
-                      }
-                      color="error"
-                    >
-                      <NotificationsNoneIcon />
-                    </Badge>
-                  </IconButton>
-                  <Menu
-                    anchorEl={alertsAnchorEl}
-                    open={alertsOpen}
-                    onClose={() => setAlertsOpen(false)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  >
-                    <MenuItem
-                      onClick={() => {
-                        setAlertsOpen(false);
-                        setDismissedRec(true);
-                        navigate('/albums');
-                      }}
-                    >
-                      {t('Recomendaciones pendientes')}: {pendingRecCount}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        setAlertsOpen(false);
-                        setDismissedFollowers(true);
-                        navigate('/friends');
-                      }}
-                    >
-                      {t('Seguidores')}: {followersCount}
-                    </MenuItem>
-                  </Menu>
-                </Box>
                 <Box
                   sx={{ ml: 2 }}
                   onMouseEnter={handleAvatarMouseEnter}
