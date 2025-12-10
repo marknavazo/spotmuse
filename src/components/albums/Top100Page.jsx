@@ -10,12 +10,12 @@ import {
   Button,
   Skeleton,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { collection, onSnapshot, query, where, addDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import { db } from '../../firebase/firestore';
 import { getAlbumById } from '../../services/spotifyService';
 import AlbumCover from '../common/AlbumCover';
@@ -198,7 +198,7 @@ export default function Top100Page() {
                       }
                       sx={{ color: '#1db954' }}
                     >
-                      <PlayArrowIcon />
+                      <SpotifyIcon style={{ fontSize: 28 }} />
                     </IconButton>
                     <Button
                       variant="contained"

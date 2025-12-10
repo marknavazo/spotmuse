@@ -9,13 +9,13 @@ import {
   Typography,
   IconButton,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import { db } from '../../firebase/firestore';
 import {
   incrementAlbumPlay,
@@ -164,7 +164,7 @@ export default function AlbumTracks({ album, user }) {
                     sx={{ color: '#1db954' }}
                     aria-label={t('Escuchar en Spotify')}
                   >
-                    <PlayArrowIcon />
+                    <SpotifyIcon style={{ fontSize: 28 }} />
                   </IconButton>
                   <Button
                     variant="outlined"

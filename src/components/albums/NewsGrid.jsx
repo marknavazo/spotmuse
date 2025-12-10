@@ -1,6 +1,6 @@
 import { Box, CircularProgress, Grid, IconButton, Paper, Button } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 
 export default function NewsGrid({
@@ -65,7 +65,7 @@ export default function NewsGrid({
                   sx={{ color: '#1db954', mt: 1, display: 'inline-flex', alignSelf: 'flex-start' }}
                   aria-label={t('Escuchar en Spotify')}
                 >
-                  <PlayArrowIcon />
+                  <SpotifyIcon style={{ fontSize: 28 }} />
                 </IconButton>
                 <Button
                   variant="contained"

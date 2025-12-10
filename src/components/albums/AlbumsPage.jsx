@@ -702,8 +702,13 @@ export default function AlbumsPage() {
             color="error"
             sx={{
               borderColor: '#ff4d4f',
-              color: '#ff4d4f',
-              '&:hover': { borderColor: '#ff6b6d', bgcolor: 'rgba(255,77,79,0.08)' },
+              color: 'white',
+              backgroundColor: '#ff4d4f',
+              '&:hover': {
+                borderColor: '#ff6b6d',
+                bgcolor: 'rgba(255,77,79,0.18)',
+                color: 'white',
+              },
             }}
           >
             {t('Cancelar')}

@@ -8,11 +8,11 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import { db } from '../../firebase/firestore';
 import { incrementAlbumPlay } from '../../services/firebaseService';
 import auth from '../../firebase/auth';
@@ -129,7 +129,7 @@ export default function SongsPage() {
                           sx={{ color: '#1db954' }}
                           aria-label={t('Escuchar en Spotify')}
                         >
-                          <PlayArrowIcon />
+                          <SpotifyIcon style={{ fontSize: 28 }} />
                         </IconButton>
                       )}
                     </Box>

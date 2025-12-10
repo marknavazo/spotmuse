@@ -13,9 +13,9 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useTranslation } from 'react-i18next';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 import { db } from '../../firebase/firestore';
 import auth from '../../firebase/auth';
@@ -263,7 +263,7 @@ export default function UserProfilePage() {
                   sx={{ color: '#1db954' }}
                   aria-label={t('Escuchar en Spotify')}
                 >
-                  <PlayArrowIcon />
+                  <SpotifyIcon style={{ fontSize: 28 }} />
                 </IconButton>
               </Box>
             </Paper>

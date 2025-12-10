@@ -148,7 +148,6 @@ export default function FriendsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Nombre')}</TableCell>
-                  <TableCell>UID</TableCell>
                   <TableCell>{t('Acciones')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -156,7 +155,6 @@ export default function FriendsPage() {
                 {searchResults.map((u) => (
                   <TableRow key={u.uid}>
                     <TableCell>{u.fullName || 'Sin nombre'}</TableCell>
-                    <TableCell>{u.uid}</TableCell>
                     <TableCell>
                       {isFollowing(u.uid) ? (
                         <Typography variant="body2" color="success.main">
@@ -210,7 +208,6 @@ export default function FriendsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Nombre')}</TableCell>
-                  <TableCell>UID</TableCell>
                   <TableCell>{t('Acciones')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -222,7 +219,6 @@ export default function FriendsPage() {
                     onClick={() => navigate(`/user/${f.friendUid}`)}
                   >
                     <TableCell>{f.friendName}</TableCell>
-                    <TableCell>{f.friendUid}</TableCell>
                     <TableCell>
                       <IconButton
                         onClick={(e) => {
@@ -238,7 +234,7 @@ export default function FriendsPage() {
                 ))}
                 {following.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={2} align="center">
                       {t('No sigues a nadie aún')}
                     </TableCell>
                   </TableRow>
@@ -259,7 +255,6 @@ export default function FriendsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Nombre')}</TableCell>
-                  <TableCell>UID</TableCell>
                   <TableCell>{t('Estado')}</TableCell>
                   <TableCell>{t('Acciones')}</TableCell>
                 </TableRow>
@@ -274,7 +269,6 @@ export default function FriendsPage() {
                       onClick={() => navigate(`/user/${f.userId}`)}
                     >
                       <TableCell>{f.friendName || t('Usuario')}</TableCell>
-                      <TableCell>{f.userId}</TableCell>
                       <TableCell>
                         {mutual ? (
                           <Typography variant="body2" sx={{ color: '#1db954' }}>
@@ -309,7 +303,7 @@ export default function FriendsPage() {
                 })}
                 {followers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={3} align="center">
                       {t('Nadie te sigue aún')}
                     </TableCell>
                   </TableRow>

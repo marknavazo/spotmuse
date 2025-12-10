@@ -10,10 +10,10 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 
 export default function RecommendedTables({
@@ -120,7 +120,7 @@ export default function RecommendedTables({
                       }}
                       sx={{ color: '#1db954' }}
                     >
-                      <PlayArrowIcon />
+                      <SpotifyIcon style={{ fontSize: 28 }} />
                     </IconButton>
                     <IconButton onClick={() => acceptRecommendation(r)} color="success">
                       <CheckIcon />
@@ -208,7 +208,7 @@ export default function RecommendedTables({
                       }}
                       sx={{ color: '#1db954' }}
                     >
-                      <PlayArrowIcon />
+                      <SpotifyIcon style={{ fontSize: 28 }} />
                     </IconButton>
                     <IconButton onClick={() => deleteRecommendation(r.id)} color="error">
                       <DeleteIcon />

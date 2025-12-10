@@ -48,10 +48,10 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 
 function AlbumsHeader({ t, sortKey, sortDir, toggleSort }) {
@@ -161,7 +161,7 @@ function AlbumRow({
           }}
           sx={{ color: '#1db954' }}
         >
-          <PlayArrowIcon />
+          <SpotifyIcon style={{ fontSize: 28 }} />
         </IconButton>
         <IconButton onClick={() => openRecommendDialog(a)}>
           <ShareIcon />

@@ -14,7 +14,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
 import toast from 'react-hot-toast';
 import {
@@ -28,6 +27,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import { db } from '../../firebase/firestore';
 import {
   incrementAlbumPlay,
@@ -330,7 +330,7 @@ export default function AlbumDetail() {
                 }}
                 sx={{ color: '#1db954' }}
               >
-                <PlayArrowIcon />
+                <SpotifyIcon style={{ fontSize: 28 }} />
               </IconButton>
             </div>
             {lists.length > 0 && (
@@ -375,7 +375,11 @@ export default function AlbumDetail() {
                 variant="contained"
                 color="secondary"
                 startIcon={<ShareIcon />}
-                sx={{ bgcolor: '#1976d2', '&:hover': { bgcolor: '#2196f3' } }}
+                sx={{
+                  bgcolor: '#1976d2',
+                  color: 'white',
+                  '&:hover': { bgcolor: '#2196f3', color: 'white' },
+                }}
                 onClick={recommendAlbum}
               >
                 {t('Recomendar')}

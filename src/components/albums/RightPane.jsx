@@ -1,6 +1,6 @@
 import { Grid, TextField, Button, Box, CircularProgress, Paper, IconButton } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
+import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 
 export default function RightPane({
@@ -106,7 +106,7 @@ export default function RightPane({
                         }}
                         aria-label={t('Escuchar en Spotify')}
                       >
-                        <PlayArrowIcon />
+                        <SpotifyIcon style={{ fontSize: 28 }} />
                       </IconButton>
                       <Button
                         variant="contained"
