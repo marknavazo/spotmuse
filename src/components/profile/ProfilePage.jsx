@@ -309,6 +309,14 @@ export default function ProfilePage() {
                     }
                     sx={{ width: '100%', '&:hover': { bgcolor: 'transparent' } }}
                   >
+                    {/* Mostrar imagen del grupo si existe */}
+                    {ar.images?.[0]?.url && (
+                      <Avatar
+                        src={ar.images[0].url}
+                        alt={ar.name}
+                        sx={{ width: 40, height: 40, mr: 2 }}
+                      />
+                    )}
                     <ListItemText
                       primary={ar.name}
                       secondary={t('Seguidores') + ': ' + (ar.followers?.total || 0)}

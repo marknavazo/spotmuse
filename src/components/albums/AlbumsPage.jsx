@@ -354,7 +354,18 @@ export default function AlbumsPage() {
     artists: r.artist,
     images: r.images || [],
     releaseDate: r.releaseDate,
-    addedAt: r.createdAt || r.acceptedAt || null,
+    addedAt:
+      (r.createdAt && r.createdAt.toDate
+        ? r.createdAt.toDate().toISOString()
+        : typeof r.createdAt === 'string' || typeof r.createdAt === 'number'
+          ? r.createdAt
+          : null) ||
+      (r.acceptedAt && r.acceptedAt.toDate
+        ? r.acceptedAt.toDate().toISOString()
+        : typeof r.acceptedAt === 'string' || typeof r.acceptedAt === 'number'
+          ? r.acceptedAt
+          : null) ||
+      null,
     viaRecommendation: true,
     recommendedBy: r.from,
   }));
@@ -363,8 +374,16 @@ export default function AlbumsPage() {
     if (!byId.has(a.albumId)) byId.set(a.albumId, a);
   }
   for (const a of myAlbums) {
-    // overwrite with real saved album
-    byId.set(a.albumId, a);
+    // overwrite with real saved album, normalizing addedAt
+    byId.set(a.albumId, {
+      ...a,
+      addedAt:
+        a.addedAt && a.addedAt.toDate
+          ? a.addedAt.toDate().toISOString()
+          : typeof a.addedAt === 'string' || typeof a.addedAt === 'number'
+            ? a.addedAt
+            : null,
+    });
   }
   const myAlbumsCombined = Array.from(byId.values());
 

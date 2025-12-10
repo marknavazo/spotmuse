@@ -8,7 +8,11 @@ MyAlbumsTable.propTypes = {
       artists: PropTypes.string,
       images: PropTypes.array,
       releaseDate: PropTypes.string,
-      addedAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+      addedAt: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number,
+        PropTypes.oneOf([null, undefined]),
+      ]),
     })
   ).isRequired,
   myLoading: PropTypes.bool.isRequired,
@@ -26,6 +30,7 @@ MyAlbumsTable.propTypes = {
   openRecommendDialog: PropTypes.func.isRequired,
   deleteAlbum: PropTypes.func.isRequired,
 };
+import React from 'react';
 import {
   Box,
   CircularProgress,
@@ -39,7 +44,10 @@ import {
   TableRow,
   TextField,
   Button,
+  Drawer,
+  useMediaQuery,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ShareIcon from '@mui/icons-material/Share';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -60,11 +68,13 @@ function AlbumsHeader({ t, sortKey, sortDir, toggleSort }) {
         <TableCell onClick={() => toggleSort('year')} sx={{ cursor: 'pointer' }}>
           {t('Año')} {sortKey === 'year' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
         </TableCell>
-        <TableCell onClick={() => toggleSort('avg')} sx={{ cursor: 'pointer' }}>
-          {t('Media')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-        </TableCell>
-        <TableCell onClick={() => toggleSort('my')} sx={{ cursor: 'pointer' }}>
-          {t('Mi puntuación')} {sortKey === 'my' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+        <TableCell
+          onClick={() => {
+            toggleSort('avg');
+          }}
+          sx={{ cursor: 'pointer' }}
+        >
+          {t('Nota')} {sortKey === 'avg' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
         </TableCell>
         <TableCell onClick={() => toggleSort('added')} sx={{ cursor: 'pointer' }}>
           {t('Añadido')} {sortKey === 'added' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
@@ -90,7 +100,7 @@ function AlbumRow({
     <TableRow key={a.id}>
       <TableCell sx={{ p: 0 }}>
         <AlbumCover
-          images={a.images || a.album?.images}
+          images={a.images || (a.album && a.album.images)}
           alt={a.name}
           onClick={() => navigate(`/album/${a.albumId}`)}
         />
@@ -132,10 +142,10 @@ function AlbumRow({
       <TableCell>{a.releaseDate ? new Date(a.releaseDate).getFullYear() : '-'}</TableCell>
       <TableCell>
         {typeof avgRatings[a.albumId] === 'number' ? Number(avgRatings[a.albumId]).toFixed(1) : '-'}
+        {typeof myRatings[a.albumId] === 'number' ? ` (${myRatings[a.albumId]})` : ''}
       </TableCell>
-      <TableCell>{typeof myRatings[a.albumId] === 'number' ? myRatings[a.albumId] : '-'}</TableCell>
       <TableCell>
-        {a.addedAt?.toDate
+        {a.addedAt && a.addedAt.toDate
           ? new Date(a.addedAt.toDate()).toLocaleDateString()
           : a.addedAt
             ? new Date(a.addedAt).toLocaleDateString()
@@ -181,33 +191,57 @@ export default function MyAlbumsTable({
   openRecommendDialog,
   deleteAlbum,
 }) {
+  const isMobile = useMediaQuery('(max-width:850px)');
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  const headerContent = (
+    <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: isMobile ? 'column' : 'row' }}>
+      <TextField
+        fullWidth
+        size="small"
+        placeholder={t('Buscar en mis álbumes')}
+        value={myFilter}
+        onChange={(e) => setMyFilter(e.target.value)}
+      />
+      <Button
+        variant="outlined"
+        onClick={() => setMyFilter('')}
+        sx={{
+          borderColor: '#1db954',
+          color: '#1db954',
+          fontWeight: 600,
+          px: 2,
+          '&:hover': { borderColor: '#1ed760', bgcolor: 'rgba(29,185,84,0.1)' },
+        }}
+      >
+        {t('Limpiar')}
+      </Button>
+    </Box>
+  );
+
   return (
     <Paper sx={{ p: 2 }}>
-      <h3>
-        {t('Mis álbumes')} ({myAlbumsCombined.length})
-      </h3>
-      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder={t('Buscar en mis álbumes')}
-          value={myFilter}
-          onChange={(e) => setMyFilter(e.target.value)}
-        />
-        <Button
-          variant="outlined"
-          onClick={() => setMyFilter('')}
-          sx={{
-            borderColor: '#1db954',
-            color: '#1db954',
-            fontWeight: 600,
-            px: 2,
-            '&:hover': { borderColor: '#1ed760', bgcolor: 'rgba(29,185,84,0.1)' },
-          }}
-        >
-          {t('Limpiar')}
-        </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3>
+          {t('Mis álbumes')} ({myAlbumsCombined.length})
+        </h3>
+        {isMobile && (
+          <IconButton onClick={() => setDrawerOpen(true)} sx={{ ml: 1 }}>
+            <MenuIcon />
+          </IconButton>
+        )}
       </Box>
+      {!isMobile && headerContent}
+      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <Box sx={{ width: 280, p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <IconButton onClick={() => setDrawerOpen(false)}>
+              <span style={{ fontSize: 24, fontWeight: 'bold' }}>×</span>
+            </IconButton>
+          </Box>
+          {headerContent}
+        </Box>
+      </Drawer>
       {myLoading && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <CircularProgress size={20} />
