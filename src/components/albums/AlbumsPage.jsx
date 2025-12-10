@@ -1,3 +1,4 @@
+// Moved useMediaQuery hook inside component to fix invalid hook call
 import { useEffect, useState } from 'react';
 import {
   Container,
@@ -59,6 +60,7 @@ import ListsTable from './ListsTable';
 import RightPane from './RightPane';
 
 export default function AlbumsPage() {
+  const isCompactTabs = useMediaQuery('(max-width:850px)');
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
@@ -510,7 +512,8 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'myAlbums' ? '#1ed760' : '#3a3a3a' },
               }}
             >
-              {t('Álbumes')} ({myAlbumsCombined.length})
+              {t('Álbumes')}
+              {!isCompactTabs && myAlbumsCombined.length > 0 ? ` (${myAlbumsCombined.length})` : ''}
             </Button>
             <Button
               onClick={() => setActiveTab('recommended')}
@@ -519,7 +522,8 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'recommended' ? '#1ed760' : '#3a3a3a' },
               }}
             >
-              {t('Recomendados')} ({recommended.length})
+              {t('Recomendados')}
+              {!isCompactTabs && recommended.length > 0 ? ` (${recommended.length})` : ''}
             </Button>
             <Button
               onClick={() => {
@@ -552,7 +556,8 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'lists' ? '#1ed760' : '#3a3a3a' },
               }}
             >
-              {t('Listas')} ({lists.length})
+              {t('Listas')}
+              {!isCompactTabs && lists.length > 0 ? ` (${lists.length})` : ''}
             </Button>
           </ButtonGroup>
 

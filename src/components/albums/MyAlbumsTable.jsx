@@ -54,6 +54,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SpotifyIcon from '../common/SpotifyIcon';
 import AlbumCover from '../common/AlbumCover';
 
+import AlbumCard from './AlbumCard';
+
 function AlbumsHeader({ t, sortKey, sortDir, toggleSort }) {
   return (
     <TableHead>
@@ -192,6 +194,8 @@ export default function MyAlbumsTable({
   deleteAlbum,
 }) {
   const isMobile = useMediaQuery('(max-width:850px)');
+  const isCardView = useMediaQuery('(max-width:2100px)');
+  const isSingleCard = useMediaQuery('(max-width:750px)');
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   const headerContent = (
@@ -225,11 +229,6 @@ export default function MyAlbumsTable({
         <h3>
           {t('Álbumes')} ({myAlbumsCombined.length})
         </h3>
-        {isMobile && (
-          <IconButton onClick={() => setDrawerOpen(true)} sx={{ ml: 1 }}>
-            <MenuIcon />
-          </IconButton>
-        )}
       </Box>
       {!isMobile && headerContent}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
@@ -248,13 +247,18 @@ export default function MyAlbumsTable({
           <span>{t('Cargando...')}</span>
         </Box>
       )}
-      <TableContainer>
-        <Table>
-          <AlbumsHeader t={t} sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
-          <TableBody>
-            {myAlbumsCombined.map((a) => (
-              <AlbumRow
-                key={a.id}
+      {isCardView ? (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isSingleCard ? '1fr' : 'repeat(2, 1fr)',
+            gap: 2,
+            mt: 2,
+          }}
+        >
+          {myAlbumsCombined.map((a) => (
+            <React.Suspense fallback={<div>Cargando…</div>} key={a.id}>
+              <AlbumCard
                 a={a}
                 t={t}
                 avgRatings={avgRatings}
@@ -265,10 +269,32 @@ export default function MyAlbumsTable({
                 openRecommendDialog={openRecommendDialog}
                 deleteAlbum={deleteAlbum}
               />
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </React.Suspense>
+          ))}
+        </Box>
+      ) : (
+        <TableContainer>
+          <Table>
+            <AlbumsHeader t={t} sortKey={sortKey} sortDir={sortDir} toggleSort={toggleSort} />
+            <TableBody>
+              {myAlbumsCombined.map((a) => (
+                <AlbumRow
+                  key={a.id}
+                  a={a}
+                  t={t}
+                  avgRatings={avgRatings}
+                  myRatings={myRatings}
+                  user={user}
+                  navigate={navigate}
+                  incrementAlbumPlay={incrementAlbumPlay}
+                  openRecommendDialog={openRecommendDialog}
+                  deleteAlbum={deleteAlbum}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
     </Paper>
   );
 }

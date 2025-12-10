@@ -11,7 +11,10 @@ import {
   TableRow,
   TextField,
   Button,
+  IconButton,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 export default function ListsTable({
   t,
@@ -103,17 +106,13 @@ export default function ListsTable({
                       {t('Guardar')}
                     </Button>
                   ) : (
-                    <Button
-                      onClick={() => startEditList(l)}
-                      sx={{ mr: 1, bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
-                      variant="contained"
-                    >
-                      {t('Editar')}
-                    </Button>
+                    <IconButton onClick={() => startEditList(l)} sx={{ color: '#1db954', mr: 1 }}>
+                      <EditIcon />
+                    </IconButton>
                   )}
-                  <Button onClick={() => deleteList(l.id)} color="error" variant="outlined">
-                    {t('Eliminar')}
-                  </Button>
+                  <IconButton onClick={() => deleteList(l.id)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}

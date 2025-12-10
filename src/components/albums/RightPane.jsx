@@ -41,7 +41,7 @@ export default function RightPane({
         </Grid>
       </Grid>
 
-      <Grid container spacing={2} sx={{ mt: 3 }} id="results-section">
+      <Grid container spacing={2} sx={{ mt: 1 }} id="results-section">
         <Grid item xs={12}>
           {q && <h3>{t('Resultados')}</h3>}
           {searchLoading && (
