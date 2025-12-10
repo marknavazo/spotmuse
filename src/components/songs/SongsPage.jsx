@@ -59,11 +59,9 @@ export default function SongsPage() {
   }, [user]);
 
   return (
-    <Container maxWidth="md" sx={{ mt: 2 }}>
+    <Container maxWidth={false} sx={{ mt: 2, px: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {t('Canciones favoritas')}
-        </Typography>
+        <Typography variant="h4">{t('Canciones favoritas')}</Typography>
         {/* Aquí puedes añadir controles futuros, como selector de vista, filtros, etc. */}
       </Box>
       {loading ? (
@@ -81,7 +79,7 @@ export default function SongsPage() {
               ? new Date(it.album.release_date).getFullYear()
               : '';
             return (
-              <Grid item xs={12} key={`${it.albumId}_${it.trackId}`}>
+              <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={`${it.albumId}_${it.trackId}`}>
                 <Paper
                   sx={{
                     p: 2,
