@@ -199,7 +199,7 @@ export default function MyAlbumsTable({
       <TextField
         fullWidth
         size="small"
-        placeholder={t('Buscar en mis álbumes')}
+        placeholder={t('Buscar en álbumes')}
         value={myFilter}
         onChange={(e) => setMyFilter(e.target.value)}
       />
@@ -223,7 +223,7 @@ export default function MyAlbumsTable({
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h3>
-          {t('Mis álbumes')} ({myAlbumsCombined.length})
+          {t('Álbumes')} ({myAlbumsCombined.length})
         </h3>
         {isMobile && (
           <IconButton onClick={() => setDrawerOpen(true)} sx={{ ml: 1 }}>

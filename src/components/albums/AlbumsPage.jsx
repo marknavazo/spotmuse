@@ -510,7 +510,7 @@ export default function AlbumsPage() {
                 '&:hover': { bgcolor: activeTab === 'myAlbums' ? '#1ed760' : '#3a3a3a' },
               }}
             >
-              {t('Mis álbumes')} ({myAlbumsCombined.length})
+              {t('Álbumes')} ({myAlbumsCombined.length})
             </Button>
             <Button
               onClick={() => setActiveTab('recommended')}
