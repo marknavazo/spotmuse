@@ -686,7 +686,7 @@ export default function AlbumsPage() {
                     onClick={() => _recommendTo(selectedAlbum, friend.friendUid)}
                     sx={{ '&:hover': { bgcolor: 'rgba(29, 185, 84, 0.1)' }, borderRadius: 1 }}
                   >
-                    <ListItemText primary={friend.friendName} secondary={friend.friendUid} />
+                    <ListItemText primary={friend.friendName} />
                   </ListItemButton>
                 </ListItem>
               ))}

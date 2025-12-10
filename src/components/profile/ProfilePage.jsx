@@ -26,6 +26,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 
 import AlbumCover from '../common/AlbumCover';
 import { searchArtists } from '../../services/spotifyService';
+import SpotifyIcon from '../common/SpotifyIcon';
 import { storage } from '../../firebase/storage';
 import { db } from '../../firebase/firestore';
 import auth from '../../firebase/auth';
@@ -268,7 +269,14 @@ export default function ProfilePage() {
                   variant="contained"
                   onClick={handleArtistSearch}
                   disabled={artistLoading}
-                  sx={{ bgcolor: '#1db954', '&:hover': { bgcolor: '#1ed760' } }}
+                  sx={{
+                    bgcolor: '#1db954',
+                    '&:hover': { bgcolor: '#1ed760' },
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                  startIcon={<SpotifyIcon style={{ fontSize: 22 }} />}
                 >
                   {artistLoading ? t('Buscando...') : t('Buscar')}
                 </Button>
@@ -311,8 +319,15 @@ export default function ProfilePage() {
                     onClick={() =>
                       window.open(`https://open.spotify.com/artist/${ar.id}`, '_blank')
                     }
-                    sx={{ width: '100%', '&:hover': { bgcolor: 'transparent' } }}
+                    sx={{
+                      width: '100%',
+                      '&:hover': { bgcolor: 'transparent' },
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
                   >
+                    <SpotifyIcon style={{ fontSize: 22, marginRight: 8 }} />
                     {/* Mostrar imagen del grupo si existe */}
                     {ar.images?.[0]?.url && (
                       <Avatar
